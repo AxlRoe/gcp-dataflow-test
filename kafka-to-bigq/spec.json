@@ -1,0 +1,6 @@
+{
+  "image": "europe-west6-docker.pkg.dev/data-flow-test-327119/ktbq-test",
+  "sdk_info": {
+    "language": "JAVA"
+  }
+}
