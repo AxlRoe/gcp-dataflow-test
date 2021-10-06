@@ -1,6 +1,7 @@
 #!/bin/bash
 
-gcloud auth configure-docker europe-west6-docker.pkg.dev
+gcloud auth configure-docker
+#gcloud auth configure-docker europe-west6-docker.pkg.dev
 export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/data-flow-sa.json
 export BUCKET_NAME=gs://data-flow-bucket_1
 #gsutil mb -p data-flow-test-327119 -c NEARLINE -l europe-west6 -b on gs://data-flow-bucket_1
@@ -15,7 +16,8 @@ cd ./DataflowTemplates/v2
 export PROJECT=data-flow-test-327119
 export REPOSITORY=dataflow-repo
 export IMAGE_NAME=ktbq-test
-export TARGET_GCR_IMAGE=europe-west6-docker.pkg.dev/${PROJECT}/${REPOSITORY}/${IMAGE_NAME}
+#export TARGET_GCR_IMAGE=europe-west6-docker.pkg.dev/${PROJECT}/${REPOSITORY}/${IMAGE_NAME}
+export TARGET_GCR_IMAGE=gcr.io/${PROJECT}/${IMAGE_NAME}
 export BASE_CONTAINER_IMAGE=gcr.io/dataflow-templates-base/java8-template-launcher-base
 export BASE_CONTAINER_IMAGE_VERSION=latest
 export TEMPLATE_MODULE=kafka-to-bigquery
