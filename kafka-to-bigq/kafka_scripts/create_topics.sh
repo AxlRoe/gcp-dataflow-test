@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-ADDRESS=34.65.208.53
+ADDRESS=$(gcloud compute instances describe kafka-1-kafka-vm-0 --zone=europe-west6-a --format="yaml(networkInterfaces)" | grep natIP | awk '{print $2}')
 echo "Cleaning topics"
 TOPICS=$(/usr/local/bin/kafka/./kafka-topics.sh --bootstrap-server $ADDRESS:9092 --list); for t in $TOPICS; do /usr/local/bin/kafka/./kafka-topics.sh --bootstrap-server $ADDRESS:9092 --topic $t --delete; done
 

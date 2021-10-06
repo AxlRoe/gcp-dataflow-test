@@ -1,5 +1,7 @@
 #!/bin/bash
 
+KAFKA_ADDRESS=$(gcloud compute instances describe kafka-1-kafka-vm-0 --zone=europe-west6-a --format="yaml(networkInterfaces)" | grep natIP | awk '{print $2}')
+
 gcloud auth configure-docker europe-west6-docker.pkg.dev
 export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/data-flow-sa.json
 export BUCKET_NAME=gs://data-flow-bucket_1
@@ -31,7 +33,7 @@ mvn clean package -DskipTests -Dimage=${TARGET_GCR_IMAGE} \
 export TEMPLATE_IMAGE_SPEC=${BUCKET_NAME}/images/spec.json
 
 export TOPICS=exchange.samples
-export BOOTSTRAP=10.172.0.4:9092
+export BOOTSTRAP=$KAFKA_ADDRESS:9092
 
 export OUTPUT_TABLE=${PROJECT}:kafka_to_bigquery.transactions
 export JS_PATH=${BUCKET_NAME}/my_function.js
