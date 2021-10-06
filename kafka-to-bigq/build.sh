@@ -7,6 +7,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/data-flow-sa.json
 export BUCKET_NAME=gs://data-flow-bucket_1
 #gsutil mb -p data-flow-test-327119 -c NEARLINE -l europe-west6 -b on gs://data-flow-bucket_1
 gsutil cp spec.json $BUCKET_NAME/images/
+gsutil cp my_function.js $BUCKET_NAME/
 
 
 if [ ! -d ./DataflowTemplates ]; then

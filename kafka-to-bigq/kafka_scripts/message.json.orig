@@ -1,0 +1,22 @@
+{
+   "exchangeId":"30972940_47972#FIRST_HALF_GOALS_25",
+   "eventId":30972940,
+   "home":"FC Halifax Town",
+   "guest":"Notts County",
+   "runnerName":"Under 2,5 goal",
+   "eventName":"FC Halifax Town - Notts County",
+   "marketName":"FIRST_HALF_GOALS_25",
+   "inplay":false,
+   "runnerId":47972,
+   "description":"[30972940] - FC Halifax Town - Notts County: Under 2,5 goal",
+   "lay":1.14,
+   "back":1.1,
+   "matched":112.12,
+   "available":109.41,
+   "totalAvailable":2161.248881495181,
+   "totalMatched":0,
+   "status":"ACTIVE",
+   "ts":"2021-10-05T15:30:10.890Z",
+   "site":"BETFAIR",
+   "cutoffDate":"2021-10-05T18:45:00.000Z"
+}
