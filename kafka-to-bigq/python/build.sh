@@ -4,7 +4,7 @@ KAFKA_ADDRESS=$(gcloud compute instances describe kafka-1-kafka-vm-0 --zone=euro
 
 gcloud auth configure-docker europe-west6-docker.pkg.dev
 export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/data-flow-sa.json
-export BUCKET_NAME=gs://data-flow-bucket_1
+export BUCKET_NAME=data-flow-bucket_1
 
 if [ ! -d ./DataflowTemplates ]; then
 	git clone https://github.com/AxlRoe/gcp-dataflow-test 
