@@ -57,8 +57,6 @@ def parse_json_message(message: str) -> Dict[str, Any]:
 
 
 def run(
-    input_subscription: str,
-    output_table: str,
     window_interval_sec: int = 60,
     beam_args: List[str] = None,
 ) -> None:
@@ -69,8 +67,10 @@ def run(
         messages = (
             pipeline
             | "Read from Kafka"
-            >> kafka.ReadFromKafka(
-                subscription=input_subscription
+            >> kafka.ReadFromKafka(consumer_config = {'bootstrap_servers': 'localhost:9092'},
+                topics=['exchange.samples'],
+                key_deserializer='org.apache.kafka.common.serialization.StringDeserializer',
+                value_deserializer='org.apache.kafka.common.serialization.StringDeserializer'
             ).with_output_types(bytes)
             | "UTF-8 bytes to string" >> beam.Map(lambda msg: msg.decode("utf-8"))
             | "Parse JSON messages" >> beam.Map(parse_json_message)
@@ -80,7 +80,7 @@ def run(
 
         # Output the results into BigQuery table.
         _ = messages | "Write to Big Query" >> beam.io.WriteToBigQuery(
-            output_table, schema=SCHEMA
+            'kafka_to_bigquery.transactions', schema=SCHEMA
         )
 
 
@@ -88,27 +88,9 @@ if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--output_table",
-        help="Output BigQuery table for results specified as: "
-        "PROJECT:DATASET.TABLE or DATASET.TABLE.",
-    )
-    parser.add_argument(
-        "--input_subscription",
-        help="Input PubSub subscription of the form "
-        '"projects/<PROJECT>/subscriptions/<SUBSCRIPTION>."',
-    )
-    parser.add_argument(
-        "--window_interval_sec",
-        default=60,
-        type=int,
-        help="Window interval in seconds for grouping incoming messages.",
-    )
     args, beam_args = parser.parse_known_args()
 
     run(
-        input_subscription=args.input_subscription,
-        output_table=args.output_table,
         window_interval_sec=args.window_interval_sec,
         beam_args=beam_args,
     )
