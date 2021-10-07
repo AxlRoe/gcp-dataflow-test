@@ -7,42 +7,33 @@ export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/data-flow-sa.json
 export BUCKET_NAME=gs://data-flow-bucket_1
 
 if [ ! -d ./DataflowTemplates ]; then
-	#TODO clone right repository
-	git clone https://github.com/GoogleCloudPlatform/DataflowTemplates
+	git clone https://github.com/AxlRoe/gcp-dataflow-test 
 
 fi
 
-cd ./DataflowTemplates/v2
+cd ./gcp-dataflow-test/kafka-to-bigq/python
 export PROJECT=data-flow-test-327119
 export REPOSITORY=dataflow-repo
-export IMAGE_NAME=ktbq-test
-export TARGET_GCR_IMAGE=europe-west6-docker.pkg.dev/${PROJECT}/${REPOSITORY}/${IMAGE_NAME}
-export BASE_CONTAINER_IMAGE=gcr.io/dataflow-templates-base/java8-template-launcher-base
-export BASE_CONTAINER_IMAGE_VERSION=latest
-export TEMPLATE_MODULE=kafka-to-bigquery
-export APP_ROOT=/template/${TEMPLATE_MODULE}
-export COMMAND_SPEC=${APP_ROOT}/resources/${TEMPLATE_MODULE}-command-spec.json
-mvn clean package -DskipTests -Dimage=${TARGET_GCR_IMAGE} \
-                  -Dbase-container-image=${BASE_CONTAINER_IMAGE} \
-                  -Dbase-container-image.version=${BASE_CONTAINER_IMAGE_VERSION} \
-                  -Dapp-root=${APP_ROOT} \
-                  -Dcommand-spec=${COMMAND_SPEC} \
-                  -am -pl ${TEMPLATE_MODULE}
+export IMAGE_NAME=ktbq-python
 
-export TEMPLATE_IMAGE_SPEC=${BUCKET_NAME}/images/spec.json
+export TEMPLATE_IMAGE="europe-west6-docker.pkg.dev/${PROJECT}/${REPOSITORY}/${IMAGE_NAME}:latest"
+# Build the image into Container Registry, this is roughly equivalent to:
+#   gcloud auth configure-docker
+#   docker image build -t $TEMPLATE_IMAGE .
+#   docker push $TEMPLATE_IMAGE
+gcloud builds submit --tag "$TEMPLATE_IMAGE" .
 
-export TOPICS=exchange.samples
-export BOOTSTRAP=$KAFKA_ADDRESS:9092
+export TEMPLATE_PATH="gs://$BUCKET_NAME/streaming-beam.json"
+gcloud dataflow flex-template build $TEMPLATE_PATH \
+  --image "$TEMPLATE_IMAGE" \
+  --sdk-language "PYTHON"
 
-export OUTPUT_TABLE=${PROJECT}:kafka_to_bigquery.transactions
-export JS_PATH=${BUCKET_NAME}/my_function.js
-export JS_FUNC_NAME=transform
-export JOB_NAME="${TEMPLATE_MODULE}-`date +%Y%m%d-%H%M%S-%N`"
+export REGION="europe-west6-a"
 
-gcloud beta dataflow flex-template run ${JOB_NAME} \
-        --project=${PROJECT} --region=europe-west6 \
-        --template-file-gcs-location=${TEMPLATE_IMAGE_SPEC} \
-        --parameters ^~^outputTableSpec=${OUTPUT_TABLE}~inputTopics=${TOPICS}~javascriptTextTransformGcsPath=${JS_PATH}~javascriptTextTransformFunctionName=${JS_FUNC_NAME}~bootstrapServers=${BOOTSTRAP}
+# Run the Flex Template.
+gcloud dataflow flex-template run "streaming-beam-`date +%Y%m%d-%H%M%S`" \
+    --template-file-gcs-location "$TEMPLATE_PATH" \
+    --region "$REGION"
 
 cd -
 
