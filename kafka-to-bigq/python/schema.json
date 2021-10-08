@@ -1,0 +1,36 @@
+[
+    {
+        "description": "timestamp",
+        "name": "ts",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED"
+    },
+    {
+        "description": "id",
+        "name": "id",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
+        "description": "market name",
+        "name": "market_name",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
+        "description": "runner name",
+        "name": "runner_name",
+        "type": "STRING",
+        "mode": "REQUIRED"
+    },
+    {
+        "description": "lay",
+        "name": "lay",
+        "type": "NUMERIC"
+    },
+    {
+        "description": "back",
+        "name": "back",
+        "type": "NUMERIC"
+    }
+]
