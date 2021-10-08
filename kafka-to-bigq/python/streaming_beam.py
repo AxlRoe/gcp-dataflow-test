@@ -67,7 +67,7 @@ def run(
         messages = (
             pipeline
             | "Read from Kafka"
-            >> kafka.ReadFromKafka(consumer_config = {'bootstrap_servers': 'localhost:9092'},
+            >> kafka.ReadFromKafka(consumer_config = {'bootstrap_servers': '34.65.208.53:9092'},
                 topics=['exchange.samples'],
                 key_deserializer='org.apache.kafka.common.serialization.StringDeserializer',
                 value_deserializer='org.apache.kafka.common.serialization.StringDeserializer'
