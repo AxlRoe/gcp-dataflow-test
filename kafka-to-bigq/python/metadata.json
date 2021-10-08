@@ -1,23 +1,22 @@
 {
-  "name": "Streaming beam Python flex template",
-  "description": "Streaming beam example for python flex template.",
+  "description": "An example pipeline that counts words in the input file.",
+  "name": "Word Count",
   "parameters": [
     {
-      "name": "input_subscription",
-      "label": "Input PubSub subscription.",
-      "helpText": "Name of the input PubSub subscription to consume from.",
       "regexes": [
-        "projects/[^/]+/subscriptions/[a-zA-Z][-_.~+%a-zA-Z0-9]{2,}"
-      ]
+        "^gs:\\/\\/[^\\n\\r]+$"
+      ],
+      "name": "input",
+      "helpText": "Path of the file pattern glob to read from - for example, gs://dataflow-samples/shakespeare/kinglear.txt",
+      "label": "Input Cloud Storage file(s)"
     },
     {
-      "name": "output_table",
-      "label": "BigQuery output table name.",
-      "helpText": "Name of the BigQuery output table name.",
-      "isOptional": true,
       "regexes": [
-        "[^:]+:[^.]+[.].+"
-      ]
+        "^gs:\\/\\/[^\\n\\r]+$"
+      ],
+      "name": "output",
+      "helpText": "Path and filename prefix for writing output files - for example, gs://MyBucket/counts",
+      "label": "Output Cloud Storage file(s)"
     }
   ]
 }
