@@ -7,12 +7,9 @@ export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/data-flow-sa.json
 export BUCKET_NAME=data-flow-bucket_1
 gsutil mb -p data-flow-test-327119 -c NEARLINE -l europe-west6 -b on gs://data-flow-bucket_1
 
-if [ ! -d ./DataflowTemplates ]; then
-	git clone https://github.com/AxlRoe/gcp-dataflow-test 
+gcloud config set builds/use_kaniko True
+gcloud config set builds/kaniko_cache_ttl 6h
 
-fi
-
-cd ./gcp-dataflow-test/kafka-to-bigq/python
 export PROJECT=data-flow-test-327119
 export REPOSITORY=dataflow-repo
 export IMAGE_NAME=ktbq-python
@@ -35,8 +32,3 @@ export REGION="europe-west6-a"
 gcloud dataflow flex-template run "streaming-beam-`date +%Y%m%d-%H%M%S`" \
     --template-file-gcs-location "$TEMPLATE_PATH" \
     --region "$REGION"
-
-cd -
-
-
-
