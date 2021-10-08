@@ -2,14 +2,8 @@
 
 KAFKA_ADDRESS=$(gcloud compute instances describe kafka-1-kafka-vm-0 --zone=europe-west6-a --format="yaml(networkInterfaces)" | grep natIP | awk '{print $2}')
 
-gcloud auth configure-docker europe-west6-docker.pkg.dev
 export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/data-flow-sa.json
 export BUCKET_NAME=data-flow-bucket_1
-gsutil mb -p data-flow-test-327119 -c NEARLINE -l europe-west6 -b on gs://data-flow-bucket_1
-
-gcloud config set builds/use_kaniko True
-gcloud config set builds/kaniko_cache_ttl 
-
 export PROJECT=data-flow-test-327119
 export REPOSITORY=dataflow-repo
 export IMAGE_NAME=ktbq-python
