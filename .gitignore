@@ -14,7 +14,7 @@ target/
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea
+kafka-to-bigq/python/.idea
 *.iws
 *.iml
 *.ipr

@@ -18,11 +18,14 @@ gcloud builds submit --tag "$TEMPLATE_IMAGE" .
 export TEMPLATE_PATH="gs://$BUCKET_NAME/streaming-beam.json"
 gcloud dataflow flex-template build $TEMPLATE_PATH \
   --image "$TEMPLATE_IMAGE" \
-  --sdk-language "PYTHON"
+  --sdk-language "PYTHON" \
+  --metadata-file "metadata.json"
 
 export REGION="europe-west6-a"
 
 # Run the Flex Template.
 gcloud dataflow flex-template run "streaming-beam-`date +%Y%m%d-%H%M%S`" \
     --template-file-gcs-location "$TEMPLATE_PATH" \
+    --parameters input_subscription="projects/$PROJECT/subscriptions/$SUBSCRIPTION" \
+    --parameters output_table="$PROJECT:$DATASET.$TABLE" \
     --region "$REGION"
