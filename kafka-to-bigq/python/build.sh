@@ -21,7 +21,8 @@ pip install -U -r requirements.txt
 
 #export TEMPLATE_PATH="gs://$BUCKET_NAME/streaming-beam.json"
 
-python3 -m wordcount \
+python wordcount.py \
+    --template true \
     --runner DataflowRunner \
     --project $PROJECT \
     --staging_location gs://$BUCKET_NAME/staging \
@@ -29,7 +30,7 @@ python3 -m wordcount \
     --template_location gs://$BUCKET_NAME/templates/$TEMPLATE_NAME \
     --region $REGION
 
-python3 main.py \
+python main.py \
   --project $PROJECT \
   --job wordcount-$(date +'%Y%m%d-%H%M%S') \
   --template gs://$BUCKET_NAME/templates/$TEMPLATE_NAME \
