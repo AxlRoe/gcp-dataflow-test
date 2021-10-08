@@ -8,7 +8,7 @@ export BUCKET_NAME=data-flow-bucket_1
 gsutil mb -p data-flow-test-327119 -c NEARLINE -l europe-west6 -b on gs://data-flow-bucket_1
 
 gcloud config set builds/use_kaniko True
-gcloud config set builds/kaniko_cache_ttl 6h
+gcloud config set builds/kaniko_cache_ttl 
 
 export PROJECT=data-flow-test-327119
 export REPOSITORY=dataflow-repo
