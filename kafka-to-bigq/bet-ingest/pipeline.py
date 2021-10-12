@@ -56,8 +56,7 @@ class RecordToGCSBucket(beam.PTransform):
         return (
                 pcoll
                 # Bind window info to each element using element timestamp (or publish time).
-                | "Window into fixed intervals"
-                | beam.WindowInto(window.FixedWindows(15, 0))
+                | "Window into fixed intervals" >> beam.WindowInto(window.FixedWindows(15, 0))
                 | "Add key" >> WithKeys(lambda _: random.randint(0, self.num_shards - 1))
                 # Group windowed elements by key. All the elements in the same window must fit
                 # memory for this. If not, you need to use `beam.util.BatchElements`.
