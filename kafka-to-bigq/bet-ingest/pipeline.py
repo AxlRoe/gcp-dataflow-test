@@ -79,6 +79,7 @@ class EventIdReader(DoFn):
 def run(bootstrap_servers, window_size=30, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
+    logging.info("Setting pipeline options")
     pipeline_options = PipelineOptions(
         args, streaming=True, save_main_session=True
     )
@@ -91,6 +92,7 @@ def run(bootstrap_servers, window_size=30, args=None):
     | 'Print' >> beam.Map(lambda x: logging.info(x)))
 
     result = pipeline.run()
+    logging.info("Called run")
 
         # (
         #         pipeline
