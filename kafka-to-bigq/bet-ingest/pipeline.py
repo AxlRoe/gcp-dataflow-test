@@ -3,119 +3,110 @@
 from __future__ import absolute_import
 
 import argparse
+import json
 import logging
-import re
-
-from past.builtins import unicode
 
 import apache_beam as beam
-from apache_beam.io import ReadFromText
-from apache_beam.io import WriteToText
-from apache_beam.metrics import Metrics
-from apache_beam.metrics.metric import MetricsFilter
-from apache_beam.options.pipeline_options import PipelineOptions, GoogleCloudOptions
-from apache_beam.options.pipeline_options import SetupOptions
+import ast
+
+from apache_beam import DoFn, ParDo, Pipeline
+from apache_beam.io import fileio
+from apache_beam.io.gcp import bigquery
+from apache_beam.io.kafka import ReadFromKafka
+from apache_beam.options.pipeline_options import PipelineOptions
+
+SCHEMA = ",".join(
+    [
+        "id:STRING",
+        "market_name:STRING",
+        "runner_name:STRING",
+        "lay:FLOAT64",
+        "back:FLOAT64",
+        "ts: TIMESTAMP"
+    ]
+)
 
 
-class WordExtractingDoFn(beam.DoFn):
-    """Parse each line of input text into words."""
+class JsonReader(beam.PTransform):
+    def expand(self, pcoll):
+        return (
+                pcoll
+                # Bind window info to each element using element timestamp (or publish time).
+                | "Read json from storage" >> ParDo(QuoteParser())
+        )
 
-    def __init__(self):
-        self.words_counter = Metrics.counter(self.__class__, 'words')
-        self.word_lengths_counter = Metrics.counter(self.__class__, 'word_lengths')
-        self.word_lengths_dist = Metrics.distribution(
-            self.__class__, 'word_len_dist')
-        self.empty_line_counter = Metrics.counter(self.__class__, 'empty_lines')
 
-    def process(self, element):
-        """Returns an iterator over the words of this element.
-        The element is a line of text.  If the line is blank, note that, too.
-        Args:
-          element: the element being processed
-        Returns:
-          The processed element.
+class QuoteParser(DoFn):
+    def process(self, file, publish_time=DoFn.TimestampParam):
+        """Processes each windowed element by extracting the message body and its
+        publish time into a tuple.
         """
-        text_line = element.strip()
-        if not text_line:
-            self.empty_line_counter.inc(1)
-        words = re.findall(r'[\w\']+', text_line, re.UNICODE)
-        for w in words:
-            self.words_counter.inc()
-            self.word_lengths_counter.inc(len(w))
-            self.word_lengths_dist.update(len(w))
-        return words
+        data = file.read_utf8()
+        if (data is None):
+            logging.info("Json read is null")
+            yield {}
+
+        yield (json.load(data))
 
 
-def run(argv=None):
+class RecordToGCSBucket(beam.PTransform):
+    def expand(self, pcoll):
+        return (
+                pcoll
+                # Bind window info to each element using element timestamp (or publish time).
+                | "Read event id from message" >> ParDo(EventIdReader())
+                | "Read files to ingest " >> beam.flatMap(lambda event_id: fileio.MatchFiles('gs://data-flow-bucket_1/' + event_id + '/*.json'))
+                | "Convert result from match file to readable file " >> fileio.ReadMatches()
+                | "shuffle " >> beam.Reshuffle()
+                | "Convert file to json" >> JsonReader()
+        )
+
+
+class EventIdReader(DoFn):
+    def process(self, record):
+        # the records have 'value' attribute when --with_metadata is given
+        if hasattr(record, 'value'):
+            message_bytes = record.value
+        elif isinstance(record, tuple):
+            message_bytes = record[1]
+        else:
+            raise RuntimeError('unknown record type: %s' % type(record))
+        # Converting bytes record from Kafka to a dictionary.
+        message = ast.literal_eval(message_bytes.decode("UTF-8"))
+        return message['event_id'];
+
+
+def run(bootstrap_servers, window_size=30, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
+    # Set `save_main_session` to True so DoFns can access globally imported modules.
+    pipeline_options = PipelineOptions(
+        args, streaming=True, save_main_session=True
+    )
 
-    class WordcountOptions(PipelineOptions):
-        @classmethod
-        def _add_argparse_args(cls, parser):
-            # Use add_value_provider_argument for arguments to be templatable
-            # Use add_argument as usual for non-templatable arguments
-            parser.add_value_provider_argument(
-                '--input',
-                default='gs://wordcount_custom_template/input/example.txt',
-                help='Path of the file to read from')
-            parser.add_value_provider_argument(
-                '--output',
-                required=True,
-                default='gs//wordcount_custom_template/output/count',
-                help='Output file to write results to.')
-
-
-    pipeline_options = PipelineOptions(['--output', 'some/output_path'])
-    pipeline_options.view_as(SetupOptions).save_main_session = True
-    p = beam.Pipeline(options=pipeline_options)
-
-    wordcount_options = pipeline_options.view_as(WordcountOptions)
-
-    # Read the text file[pattern] into a PCollection.
-    lines = p | 'read' >> ReadFromText(wordcount_options.input)
-
-    # Count the occurrences of each word.
-    def count_ones(word_ones):
-        (word, ones) = word_ones
-        return (word, sum(ones))
-
-    counts = (lines
-              | 'split' >> (beam.ParDo(WordExtractingDoFn())
-                            .with_output_types(unicode))
-              | 'pair_with_one' >> beam.Map(lambda x: (x, 1))
-              | 'group' >> beam.GroupByKey()
-              | 'count' >> beam.Map(count_ones))
-
-    # Format the counts into a PCollection of strings.
-    def format_result(word_count):
-        (word, count) = word_count
-        return '%s: %d' % (word, count)
-
-    output = counts | 'format' >> beam.Map(format_result)
-
-    # Write the output using a "Write" transform that has side effects.
-    # pylint: disable=expression-not-assigned
-    output | 'write' >> WriteToText(wordcount_options.output)
-
-    result = p.run()
-    result.wait_until_finish()
-
-    # Do not query metrics when creating a template which doesn't run
-    if (not hasattr(result, 'has_job')  # direct runner
-            or result.has_job):  # not just a template creation
-        empty_lines_filter = MetricsFilter().with_name('empty_lines')
-        query_result = result.metrics().query(empty_lines_filter)
-        if query_result['counters']:
-            empty_lines_counter = query_result['counters'][0]
-            logging.info('number of empty lines: %d', empty_lines_counter.result)
-
-        word_lengths_filter = MetricsFilter().with_name('word_len_dist')
-        query_result = result.metrics().query(word_lengths_filter)
-        if query_result['distributions']:
-            word_lengths_dist = query_result['distributions'][0]
-            logging.info('average word length: %d', word_lengths_dist.result.mean)
+    with Pipeline(options=pipeline_options) as pipeline:
+        (
+                pipeline
+                | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
+                                topics=['exchange.ended_events'],
+                                with_metadata=True)
+                | "Read files " >> RecordToGCSBucket()
+                | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
+            projectId='data-flow-test-327119',
+            datasetId='kafka_to_bigquery',
+            tableId='transactions'),
+            schema=SCHEMA,
+            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+            create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
+        )
 
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
-    run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--bootstrap_servers',
+        dest='bootstrap_servers',
+        required=True,
+        help='Bootstrap servers for the Kafka cluster. Should be accessible by the runner')
+    known_args, pipeline_args = parser.parse_known_args()
+    run(known_args.bootstrap_servers, pipeline_args)
