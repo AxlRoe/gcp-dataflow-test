@@ -15,15 +15,15 @@ PROJECT=data-flow-test-327119
 #   docker push $TEMPLATE_IMAGE
 #gcloud builds submit --tag "$TEMPLATE_IMAGE" .
 
-virtualenv env
-source env/bin/activate
-pip install -U -r requirements.txt
+#virtualenv env
+#source env/bin/activate
+#pip install -U -r requirements.txt
 
 #export TEMPLATE_PATH="gs://$BUCKET_NAME/streaming-beam.json"
 
 python pipeline.py \
 --region europe-west6 \
---bootstrap_servers 34.65.59.41:9092 \
+--bootstrap_servers $KAFKA_ADDRESS:9092 \
 --runner DataflowRunner \
 --project data-flow-test-327119 \
 --temp_location gs://$BUCKET_NAME/tmp/ \
@@ -33,7 +33,7 @@ python pipeline.py \
 python main.py \
   --project $PROJECT \
   --job bet-ingest-$(date +'%Y%m%d-%H%M%S') \
-  --bootstrap_servers 34.65.59.41:9092
+  --bootstrap_servers $KAFKA_ADDRESS:9092
 
 
 #gcloud dataflow flex-template build $TEMPLATE_PATH \
