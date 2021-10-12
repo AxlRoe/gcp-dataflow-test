@@ -81,7 +81,7 @@ def run(bootstrap_servers, window_size=30, args=None):
     # Set `save_main_session` to True so DoFns can access globally imported modules.
     logging.info("Setting pipeline options")
     pipeline_options = PipelineOptions(
-        args, streaming=True, save_main_session=True
+        args, save_main_session=True
     )
     pipeline = beam.Pipeline(options=pipeline_options)
 
