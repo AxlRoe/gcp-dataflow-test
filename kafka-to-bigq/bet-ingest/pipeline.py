@@ -5,15 +5,17 @@ from __future__ import absolute_import
 import argparse
 import json
 import logging
+from random import random
 
 import apache_beam as beam
 import ast
 
-from apache_beam import DoFn, ParDo, Pipeline
+from apache_beam import DoFn, ParDo, Pipeline, WindowInto, WithKeys, GroupByKey
 from apache_beam.io import fileio
 from apache_beam.io.gcp import bigquery
 from apache_beam.io.kafka import ReadFromKafka
 from apache_beam.options.pipeline_options import PipelineOptions
+from apache_beam.transforms import window
 
 SCHEMA = ",".join(
     [
@@ -54,6 +56,11 @@ class RecordToGCSBucket(beam.PTransform):
         return (
                 pcoll
                 # Bind window info to each element using element timestamp (or publish time).
+                | "Window into fixed intervals"
+                | beam.WindowInto(window.FixedWindows(15, 0))
+                # Group windowed elements by key. All the elements in the same window must fit
+                # memory for this. If not, you need to use `beam.util.BatchElements`.
+                | "Group by key" >> GroupByKey()
                 | "Read event id from message" >> ParDo(EventIdReader())
                 | "Read files to ingest " >> beam.FlatMap(lambda event_id: fileio.MatchFiles('gs://data-flow-bucket_1/' + event_id + '/*.json'))
                 | "Convert result from match file to readable file " >> fileio.ReadMatches()
@@ -76,45 +83,33 @@ class EventIdReader(DoFn):
         return message['event_id'];
 
 
-def run(bootstrap_servers, window_size=30, args=None):
+def run(bootstrap_servers, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
-    logging.info("Setting pipeline options")
     pipeline_options = PipelineOptions(
-        args, save_main_session=True
+        args, streaming=True, save_main_session=True
     )
+
+    #with Pipeline(options=pipeline_options) as pipeline:
+    #    (
+    #    )
+
+    logging.info("kafka address " + bootstrap_servers)
     pipeline = beam.Pipeline(options=pipeline_options)
+    pipeline = (pipeline
+    | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
+                    topics=['exchange.ended.events'])
+    | "Read files " >> RecordToGCSBucket()
+    | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
+        projectId='data-flow-test-327119',
+        datasetId='kafka_to_bigquery',
+        tableId='transactions'),
+        schema=SCHEMA,
+        write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+        create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
 
-    (pipeline
-    | beam.Create([
-        'To be, or not to be: that is the question: ',
-        "Whether 'tis nobler in the mind to suffer ",
-        'The slings and arrows of outrageous fortune, ',
-        'Or to take arms against a sea of troubles, '])
-    | beam.Map(lambda x: logging.info("AHAHAHAHAHAHAHHAHAHH" + x)))
-
-    # (pipeline
-    # | 'Read from Kafka' >> ReadFromKafka(
-    #         consumer_config={'bootstrap.servers': bootstrap_servers},
-    #         topics=['exchange.ended.events'])
-    # | 'Print' >> beam.Map(lambda x: logging.info(x)))
-
-    result = pipeline.run()
-    logging.info("Called run")
-
-        # (
-        #         pipeline
-        #         | "Listening for ended events " >> ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
-        #                                                          topics=['exchange.ended.events'])
-        #         | "Read files " >> RecordToGCSBucket()
-        #         | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
-        #                                 projectId='data-flow-test-327119',
-        #                                 datasetId='kafka_to_bigquery',
-        #                                 tableId='transactions'),
-        #             schema=SCHEMA,
-        #             write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-        #             create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
-        # )
+    pipeline.run()
+    logging.info("pipeline started")
 
 
 if __name__ == '__main__':
@@ -126,5 +121,4 @@ if __name__ == '__main__':
         required=True,
         help='Bootstrap servers for the Kafka cluster. Should be accessible by the runner')
     known_args, pipeline_args = parser.parse_known_args()
-    logging.info("Started pipeline")
     run(known_args.bootstrap_servers, pipeline_args)
