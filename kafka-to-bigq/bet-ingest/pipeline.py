@@ -58,6 +58,7 @@ class RecordToGCSBucket(beam.PTransform):
                 # Bind window info to each element using element timestamp (or publish time).
                 | "Window into fixed intervals"
                 | beam.WindowInto(window.FixedWindows(15, 0))
+                | "Add key" >> WithKeys(lambda _: random.randint(0, self.num_shards - 1))
                 # Group windowed elements by key. All the elements in the same window must fit
                 # memory for this. If not, you need to use `beam.util.BatchElements`.
                 | "Group by key" >> GroupByKey()
@@ -70,7 +71,8 @@ class RecordToGCSBucket(beam.PTransform):
 
 
 class EventIdReader(DoFn):
-    def process(self, record):
+    def process(self, tuple):
+        k, record = tuple
         # the records have 'value' attribute when --with_metadata is given
         if hasattr(record, 'value'):
             message_bytes = record.value
