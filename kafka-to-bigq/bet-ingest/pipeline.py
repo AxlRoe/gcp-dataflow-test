@@ -87,16 +87,15 @@ def run(bootstrap_servers, window_size=30, args=None):
         (
                 pipeline
                 | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
-                                topics=['exchange.ended.events'],
-                                with_metadata=True)
+                                topics=['exchange.ended.events'])
                 | "Read files " >> RecordToGCSBucket()
                 | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
-            projectId='data-flow-test-327119',
-            datasetId='kafka_to_bigquery',
-            tableId='transactions'),
-            schema=SCHEMA,
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-            create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
+                                        projectId='data-flow-test-327119',
+                                        datasetId='kafka_to_bigquery',
+                                        tableId='transactions'),
+                    schema=SCHEMA,
+                    write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                    create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
         )
 
 
