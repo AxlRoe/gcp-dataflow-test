@@ -82,14 +82,15 @@ def run(bootstrap_servers, window_size=30, args=None):
     pipeline_options = PipelineOptions(
         args, streaming=True, save_main_session=True
     )
+    pipeline = beam.Pipeline(options=pipeline_options)
 
-    with Pipeline(options=pipeline_options) as pipeline:
-        _ = (
-                pipeline
-                | 'Read from Kafka' >> ReadFromKafka(
-                        consumer_config={'bootstrap.servers': bootstrap_servers},
-                        topics=['exchange.ended.events'])
-                | 'Print' >> beam.Map(lambda x : logging.info(x)))
+    (pipeline
+    | 'Read from Kafka' >> ReadFromKafka(
+            consumer_config={'bootstrap.servers': bootstrap_servers},
+            topics=['exchange.ended.events'])
+    | 'Print' >> beam.Map(lambda x: logging.info(x)))
+
+    result = pipeline.run()
 
         # (
         #         pipeline
