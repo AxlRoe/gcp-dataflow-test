@@ -55,7 +55,7 @@ class RecordToGCSBucket(beam.PTransform):
                 pcoll
                 # Bind window info to each element using element timestamp (or publish time).
                 | "Read event id from message" >> ParDo(EventIdReader())
-                | "Read files to ingest " >> beam.flatMap(lambda event_id: fileio.MatchFiles('gs://data-flow-bucket_1/' + event_id + '/*.json'))
+                | "Read files to ingest " >> beam.FlatMap(lambda event_id: fileio.MatchFiles('gs://data-flow-bucket_1/' + event_id + '/*.json'))
                 | "Convert result from match file to readable file " >> fileio.ReadMatches()
                 | "shuffle " >> beam.Reshuffle()
                 | "Convert file to json" >> JsonReader()
