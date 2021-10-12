@@ -87,7 +87,7 @@ def run(bootstrap_servers, window_size=30, args=None):
         (
                 pipeline
                 | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
-                                topics=['exchange.ended_events'],
+                                topics=['exchange.ended.events'],
                                 with_metadata=True)
                 | "Read files " >> RecordToGCSBucket()
                 | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
