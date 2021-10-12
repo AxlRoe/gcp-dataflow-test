@@ -84,19 +84,26 @@ def run(bootstrap_servers, window_size=30, args=None):
     )
 
     with Pipeline(options=pipeline_options) as pipeline:
-        (
+        _ = (
                 pipeline
-                | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
-                                topics=['exchange.ended.events'])
-                | "Read files " >> RecordToGCSBucket()
-                | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
-                                        projectId='data-flow-test-327119',
-                                        datasetId='kafka_to_bigquery',
-                                        tableId='transactions'),
-                    schema=SCHEMA,
-                    write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                    create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
-        )
+                | 'Read from Kafka' >> ReadFromKafka(
+                        consumer_config={'bootstrap.servers': 'localhost:29092'},
+                        topics=['test'])
+                | 'Print' >> beam.Map(print))
+
+        # (
+        #         pipeline
+        #         | "Listening for ended events " >> ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
+        #                                                          topics=['exchange.ended.events'])
+        #         | "Read files " >> RecordToGCSBucket()
+        #         | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
+        #                                 projectId='data-flow-test-327119',
+        #                                 datasetId='kafka_to_bigquery',
+        #                                 tableId='transactions'),
+        #             schema=SCHEMA,
+        #             write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+        #             create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
+        # )
 
 
 if __name__ == '__main__':
