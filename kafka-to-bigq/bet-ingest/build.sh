@@ -21,21 +21,14 @@ pip install -U -r requirements.txt
 
 #export TEMPLATE_PATH="gs://$BUCKET_NAME/streaming-beam.json"
 
-python wordcount.py \
-    --template true \
-    --runner DataflowRunner \
-    --project $PROJECT \
-    --staging_location gs://$BUCKET_NAME/staging \
-    --temp_location gs://$BUCKET_NAME/temp \
-    --template_location gs://$BUCKET_NAME/templates/$TEMPLATE_NAME \
-    --region $REGION
+python pipeline.py \
+--region europe-west6 \
+--bootstrap_servers 34.65.59.41 \
+--runner DataflowRunner \
+--project data-flow-test-327119 \
+--temp_location gs://data-flow-bucket_1/tmp/ \
+--staging_location gs://data-flow-bucket_1/staging
 
-python main.py \
-  --project $PROJECT \
-  --job wordcount-$(date +'%Y%m%d-%H%M%S') \
-  --template gs://$BUCKET_NAME/templates/$TEMPLATE_NAME \
-  --inputFile gs://apache-beam-samples/shakespeare/kinglear.txt \
-  --output gs://$BUCKET_NAME/wordcount/outputs
 
 #gcloud dataflow flex-template build $TEMPLATE_PATH \
 #  --image "$TEMPLATE_IMAGE" \
