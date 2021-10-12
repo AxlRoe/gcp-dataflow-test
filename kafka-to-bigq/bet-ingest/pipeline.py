@@ -115,4 +115,5 @@ if __name__ == '__main__':
         required=True,
         help='Bootstrap servers for the Kafka cluster. Should be accessible by the runner')
     known_args, pipeline_args = parser.parse_known_args()
+    logging.info("Started pipeline")
     run(known_args.bootstrap_servers, pipeline_args)
