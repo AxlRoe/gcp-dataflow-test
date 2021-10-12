@@ -86,10 +86,18 @@ def run(bootstrap_servers, window_size=30, args=None):
     pipeline = beam.Pipeline(options=pipeline_options)
 
     (pipeline
-    | 'Read from Kafka' >> ReadFromKafka(
-            consumer_config={'bootstrap.servers': bootstrap_servers},
-            topics=['exchange.ended.events'])
-    | 'Print' >> beam.Map(lambda x: logging.info(x)))
+    | beam.Create([
+        'To be, or not to be: that is the question: ',
+        "Whether 'tis nobler in the mind to suffer ",
+        'The slings and arrows of outrageous fortune, ',
+        'Or to take arms against a sea of troubles, '])
+    | beam.Map(lambda x: logging.info("AHAHAHAHAHAHAHHAHAHH" + x)))
+
+    # (pipeline
+    # | 'Read from Kafka' >> ReadFromKafka(
+    #         consumer_config={'bootstrap.servers': bootstrap_servers},
+    #         topics=['exchange.ended.events'])
+    # | 'Print' >> beam.Map(lambda x: logging.info(x)))
 
     result = pipeline.run()
     logging.info("Called run")
