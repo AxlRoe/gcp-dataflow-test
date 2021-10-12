@@ -2,7 +2,7 @@
 
 KAFKA_ADDRESS=$(gcloud compute instances describe kafka-1-kafka-vm-0 --zone=europe-west6-a --format="yaml(networkInterfaces)" | grep natIP | awk '{print $2}')
 
-TEMPLATE_NAME=Word_Count
+TEMPLATE_NAME=bet-ingest
 REGION="europe-west6-a"
 export GOOGLE_APPLICATION_CREDENTIAL=$(pwd)/data-flow-sa.json
 BUCKET_NAME=data-flow-bucket_1
@@ -23,11 +23,17 @@ pip install -U -r requirements.txt
 
 python pipeline.py \
 --region europe-west6 \
---bootstrap_servers 34.65.59.41 \
+--bootstrap_servers 34.65.59.41:9092 \
 --runner DataflowRunner \
 --project data-flow-test-327119 \
---temp_location gs://data-flow-bucket_1/tmp/ \
---staging_location gs://data-flow-bucket_1/staging
+--temp_location gs://$BUCKET_NAME/tmp/ \
+--staging_location gs://$BUCKET_NAME/staging
+
+
+python main.py \
+  --project $PROJECT \
+  --job bet-ingest-$(date +'%Y%m%d-%H%M%S') \
+  --bootstrap_servers 34.65.59.41:9092
 
 
 #gcloud dataflow flex-template build $TEMPLATE_PATH \

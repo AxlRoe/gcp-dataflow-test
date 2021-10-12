@@ -87,8 +87,8 @@ def run(bootstrap_servers, window_size=30, args=None):
         _ = (
                 pipeline
                 | 'Read from Kafka' >> ReadFromKafka(
-                        consumer_config={'bootstrap.servers': 'localhost:29092'},
-                        topics=['test'])
+                        consumer_config={'bootstrap.servers': bootstrap_servers},
+                        topics=['exchange.ended.events'])
                 | 'Print' >> beam.Map(print))
 
         # (

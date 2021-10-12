@@ -74,11 +74,11 @@ def run_template(request):
 
     project = parameters.pop('project')
     job = parameters.pop('job')
-    template = parameters.pop('template')
+    bootstrap_servers = parameters.pop('bootstrap_servers')
     response = run(
         project=project,
         job=job,
-        template=template,
+        bootstrap_servers=bootstrap_servers,
         parameters=parameters,
     )
     return json.dumps(response, separators=(',', ':'))
@@ -92,8 +92,8 @@ if __name__ == '__main__':
                         help='Google Cloud project ID to run on.')
     parser.add_argument('--job', required=True,
                         help='Unique Dataflow job name.')
-    parser.add_argument('--template', required=True,
-                        help='Google Cloud Storage path to Dataflow template.')
+    parser.add_argument('--bootstrap_servers', required=True,
+                        help='kafka address.')
     args, unknown_args = parser.parse_known_args()
 
     # Parse the template parameters.
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     response = run(
         project=args.project,
         job=args.job,
-        template=args.template,
+        bootstrap_servers=args.bootstrap_servers,
         parameters=parameters.__dict__,
     )
     print(json.dumps(response, indent=2))
