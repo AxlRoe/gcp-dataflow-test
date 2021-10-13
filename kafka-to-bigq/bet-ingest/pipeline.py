@@ -70,7 +70,7 @@ class RecordToGCSBucket(beam.PTransform):
                 # memory for this. If not, you need to use `beam.util.BatchElements`.
                 | "Group by key" >> GroupByKey()
                 | "Read event id from message" >> ParDo(EventIdReader())
-                | "Read files to ingest " >> beam.FlatMap(lambda event_id: match(event_id))
+                | "Read files to ingest " >> beam.FlatMap(lambda event_id: match(event_id=event_id))
                 | "Convert result from match file to readable file " >> fileio.ReadMatches()
                 | "shuffle " >> beam.Reshuffle()
                 | "Convert file to json" >> JsonReader()
