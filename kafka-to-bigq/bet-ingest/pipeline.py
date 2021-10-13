@@ -65,8 +65,7 @@ class RecordToGCSBucket(beam.PTransform):
                 # Group windowed elements by key. All the elements in the same window must fit
                 # memory for this. If not, you need to use `beam.util.BatchElements`.
                 | "Group by key" >> GroupByKey()
-                | "Read event id from message" >> ParDo(EventIdReader())
-                | "Get bucket to read" >> beam.FlatMap(lambda event_id: beam.Create(['gs://data-flow-bucket_1/' + event_id + '/*.json']))
+                | "Read event id from message" >> ParDo(GCSBucketPathBuilder())
                 | "Read files to ingest " >> fileio.MatchAll()
                 | "Convert result from match file to readable file " >> fileio.ReadMatches()
                 | "shuffle " >> beam.Reshuffle()
@@ -74,7 +73,7 @@ class RecordToGCSBucket(beam.PTransform):
         )
 
 
-class EventIdReader(DoFn):
+class GCSBucketPathBuilder(DoFn):
     def process(self, message):
         k, record = message
         # the records have 'value' attribute when --with_metadata is given
@@ -90,8 +89,7 @@ class EventIdReader(DoFn):
         # Converting bytes record from Kafka to a dictionary.
         message = ast.literal_eval(message_bytes.decode("UTF-8"))
         logging.info("MSG IS " + str(message))
-        return message['event_id']
-
+        return 'gs://data-flow-bucket_1/' + message['event_id'] + '/*.json'
 
 def run(bootstrap_servers, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
