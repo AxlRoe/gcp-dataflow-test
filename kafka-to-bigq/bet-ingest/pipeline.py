@@ -11,6 +11,7 @@ from random import random
 import apache_beam as beam
 from apache_beam import DoFn, ParDo, Pipeline, WithKeys, GroupByKey
 from apache_beam.io import fileio, ReadFromPubSub
+from apache_beam.io.gcp import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.transforms import window
 
@@ -90,28 +91,29 @@ def run(bootstrap_servers, args=None):
 
     logging.info("kafka address " + bootstrap_servers)
     with Pipeline(options=pipeline_options) as pipeline:
-        (
-            pipeline
-            # Because `timestamp_attribute` is unspecified in `ReadFromPubSub`, Beam
-            # binds the publish time returned by the Pub/Sub server for each message
-            # to the element's timestamp parameter, accessible via `DoFn.TimestampParam`.
-            # https://beam.apache.org/releases/pydoc/current/apache_beam.io.gcp.pubsub.html#apache_beam.io.gcp.pubsub.ReadFromPubSub
-            | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
-            | "Write to GCS" >> beam.Map(lambda x: logging.info("AHHAHAHAHAHA " + x.decode("UTF-8")))
-        )
+        # (
+        #     pipeline
+        #     # Because `timestamp_attribute` is unspecified in `ReadFromPubSub`, Beam
+        #     # binds the publish time returned by the Pub/Sub server for each message
+        #     # to the element's timestamp parameter, accessible via `DoFn.TimestampParam`.
+        #     # https://beam.apache.org/releases/pydoc/current/apache_beam.io.gcp.pubsub.html#apache_beam.io.gcp.pubsub.ReadFromPubSub
+        #     | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
+        #     | "Write to GCS" >> beam.Map(lambda x: logging.info("AHHAHAHAHAHA " + x.decode("UTF-8")))
+        # )
 
-        # (pipeline
-        #  | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
-        #                  topics=['exchange.ended.events'])
-        #  | "Read files " >> RecordToGCSBucket()
-        #  | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
-        #             projectId='data-flow-test-327119',
-        #             datasetId='kafka_to_bigquery',
-        #             tableId='transactions'),
-        #             schema=SCHEMA,
-        #             write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-        #             create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
-        #  )
+        (pipeline
+         # | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
+         #                 topics=['exchange.ended.events'])
+         | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
+         | "Read files " >> RecordToGCSBucket()
+         | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
+                    projectId='data-flow-test-327119',
+                    datasetId='kafka_to_bigquery',
+                    tableId='transactions'),
+                    schema=SCHEMA,
+                    write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                    create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
+         )
     logging.info("pipeline started")
 
 
