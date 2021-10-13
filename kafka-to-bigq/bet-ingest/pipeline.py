@@ -57,10 +57,6 @@ class RecordToGCSBucket(beam.PTransform):
 
     def expand(self, pcoll):
 
-        def match(event_id):
-            logging.info("Searching file " + 'gs://data-flow-bucket_1/' + event_id + '/*.json')
-            return fileio.MatchFiles('gs://data-flow-bucket_1/' + event_id + '/*.json')
-
         return (
                 pcoll
                 # Bind window info to each element using element timestamp (or publish time).
@@ -70,7 +66,8 @@ class RecordToGCSBucket(beam.PTransform):
                 # memory for this. If not, you need to use `beam.util.BatchElements`.
                 | "Group by key" >> GroupByKey()
                 | "Read event id from message" >> ParDo(EventIdReader())
-                | "Read files to ingest " >> beam.FlatMap(lambda event_id: match(event_id=event_id))
+                | "Get bucket to read" >> beam.FlatMap(lambda event_id: beam.Create(['gs://data-flow-bucket_1/' + event_id + '/*.json']))
+                | "Read files to ingest " >> fileio.MatchAll()
                 | "Convert result from match file to readable file " >> fileio.ReadMatches()
                 | "shuffle " >> beam.Reshuffle()
                 | "Convert file to json" >> JsonReader()
