@@ -56,6 +56,11 @@ class RecordToGCSBucket(beam.PTransform):
         self.num_shards = num_shards
 
     def expand(self, pcoll):
+
+        def match(self, event_id):
+            logging.info("Searching file " + 'gs://data-flow-bucket_1/' + event_id + '/*.json')
+            return fileio.MatchFiles('gs://data-flow-bucket_1/' + event_id + '/*.json')
+
         return (
                 pcoll
                 # Bind window info to each element using element timestamp (or publish time).
@@ -65,7 +70,7 @@ class RecordToGCSBucket(beam.PTransform):
                 # memory for this. If not, you need to use `beam.util.BatchElements`.
                 | "Group by key" >> GroupByKey()
                 | "Read event id from message" >> ParDo(EventIdReader())
-                | "Read files to ingest " >> beam.FlatMap(lambda event_id: fileio.MatchFiles('gs://data-flow-bucket_1/' + event_id + '/*.json'))
+                | "Read files to ingest " >> beam.FlatMap(lambda event_id: match(event_id))
                 | "Convert result from match file to readable file " >> fileio.ReadMatches()
                 | "shuffle " >> beam.Reshuffle()
                 | "Convert file to json" >> JsonReader()
@@ -87,8 +92,8 @@ class EventIdReader(DoFn):
             raise RuntimeError('unknown record type: %s' % type(record))
         # Converting bytes record from Kafka to a dictionary.
         message = ast.literal_eval(message_bytes.decode("UTF-8"))
-        logging.info(str(message))
-        return "30972940"
+        logging.info("MSG IS " + str(message))
+        return message['event_id']
 
 
 def run(bootstrap_servers, args=None):
