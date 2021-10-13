@@ -41,14 +41,15 @@ class QuoteParser(DoFn):
         """Processes each windowed element by extracting the message body and its
         publish time into a tuple.
         """
-        logging.info("AHAHHAHAH file " + str(file.read_utf8()))
-        data = file.read_utf8()
-        if not data:
-            logging.info("Json read is null")
-            yield json.loads('{"id": "2", "lay": 2.0}')
-
-        logging.info("AHAHHAHAH data is" + data)
         yield json.loads('{"id": "1", "lay": 1.0}')
+        # logging.info("AHAHHAHAH file " + str(file.read_utf8()))
+        # data = file.read_utf8()
+        # if not data:
+        #     logging.info("Json read is null")
+        #     yield json.loads('{"id": "2", "lay": 2.0}')
+        #
+        # logging.info("AHAHHAHAH data is" + data)
+        # yield json.loads('{"id": "1", "lay": 1.0}')
 
 
 class RecordToGCSBucket(beam.PTransform):
