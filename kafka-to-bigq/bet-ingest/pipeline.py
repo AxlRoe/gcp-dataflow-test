@@ -96,7 +96,7 @@ def run(bootstrap_servers, args=None):
             # binds the publish time returned by the Pub/Sub server for each message
             # to the element's timestamp parameter, accessible via `DoFn.TimestampParam`.
             # https://beam.apache.org/releases/pydoc/current/apache_beam.io.gcp.pubsub.html#apache_beam.io.gcp.pubsub.ReadFromPubSub
-            | "Read from Pub/Sub" >> ReadFromPubSub(topic='exchange.ended.events')
+            | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events')
             | "Write to GCS" >> beam.Map(lambda x: logging.info("AHHAHAHAHAHA " + x))
         )
 
