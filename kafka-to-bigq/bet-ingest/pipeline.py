@@ -57,7 +57,7 @@ class RecordToGCSBucket(beam.PTransform):
 
     def expand(self, pcoll):
 
-        def match(self, event_id):
+        def match(event_id):
             logging.info("Searching file " + 'gs://data-flow-bucket_1/' + event_id + '/*.json')
             return fileio.MatchFiles('gs://data-flow-bucket_1/' + event_id + '/*.json')
 
