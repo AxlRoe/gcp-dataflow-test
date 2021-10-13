@@ -73,8 +73,8 @@ class RecordToGCSBucket(beam.PTransform):
 
 
 class EventIdReader(DoFn):
-    def process(self, tuple):
-        k, record = tuple
+    def process(self, message):
+        k, record = message
         # the records have 'value' attribute when --with_metadata is given
         if hasattr(record, 'value'):
             message_bytes = record.value
