@@ -46,7 +46,9 @@ class QuoteParser(DoFn):
             logging.info("Json read is null")
             yield {}
 
-        yield (json.load(data))
+        logging.info("AHAHHAHAH data is " + type(data))
+        logging.info("AHAHHAHAH data " + data)
+        yield (json.load("{\"id\": \"1\", \"lay\": 1.0}"))
 
 
 class RecordToGCSBucket(beam.PTransform):
@@ -82,7 +84,6 @@ class GCSBucketPathBuilder(DoFn):
         elif isinstance(record, tuple):
             message_bytes = record[1]
         elif isinstance(record, list):
-            logging.info("AHAHHAHHA")
             message_bytes = record[0]
         else:
             raise RuntimeError('unknown record type: %s' % type(record))
