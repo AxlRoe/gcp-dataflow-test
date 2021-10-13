@@ -46,7 +46,7 @@ class QuoteParser(DoFn):
             logging.info("Json read is null")
             yield {}
 
-        logging.info("AHAHHAHAH data is " + type(data))
+        logging.info("AHAHHAHAH data is " + str(type(data)))
         logging.info("AHAHHAHAH data " + data)
         yield (json.load("{\"id\": \"1\", \"lay\": 1.0}"))
 
