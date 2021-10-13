@@ -6,7 +6,7 @@ import argparse
 import ast
 import json
 import logging
-from random import random
+import random
 
 import apache_beam as beam
 from apache_beam import DoFn, ParDo, Pipeline, WithKeys, GroupByKey
@@ -50,6 +50,11 @@ class QuoteParser(DoFn):
 
 
 class RecordToGCSBucket(beam.PTransform):
+
+    def __init__(self, num_shards=5):
+        # Set window size to 60 seconds.
+        self.num_shards = num_shards
+
     def expand(self, pcoll):
         return (
                 pcoll
@@ -105,7 +110,7 @@ def run(bootstrap_servers, args=None):
          # | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
          #                 topics=['exchange.ended.events'])
          | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
-         | "Read files " >> RecordToGCSBucket()
+         | "Read files " >> RecordToGCSBucket(5)
          | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
                     projectId='data-flow-test-327119',
                     datasetId='kafka_to_bigquery',
