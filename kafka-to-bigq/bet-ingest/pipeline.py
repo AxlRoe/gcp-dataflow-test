@@ -97,7 +97,7 @@ def run(bootstrap_servers, args=None):
             # to the element's timestamp parameter, accessible via `DoFn.TimestampParam`.
             # https://beam.apache.org/releases/pydoc/current/apache_beam.io.gcp.pubsub.html#apache_beam.io.gcp.pubsub.ReadFromPubSub
             | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events')
-            | "Write to GCS" >> beam.Map(lambda x: logging.info("AHHAHAHAHAHA " + x))
+            | "Write to GCS" >> beam.Map(lambda x: logging.info("AHHAHAHAHAHA " + ast.literal_eval(x.decode("UTF-8"))))
         )
 
         # (pipeline
