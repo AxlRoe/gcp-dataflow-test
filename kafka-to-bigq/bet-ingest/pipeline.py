@@ -82,12 +82,13 @@ class EventIdReader(DoFn):
             message_bytes = record[1]
         elif isinstance(record, list):
             logging.info("AHAHHAHHA")
-            message_byte = record[0]
+            message_bytes = record[0]
         else:
             raise RuntimeError('unknown record type: %s' % type(record))
         # Converting bytes record from Kafka to a dictionary.
         message = ast.literal_eval(message_bytes.decode("UTF-8"))
-        return message['event_id']
+        logging.info(str(message))
+        return "30972940"
 
 
 def run(bootstrap_servers, args=None):
