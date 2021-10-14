@@ -11,7 +11,7 @@ done
 
 gcloud auth configure-docker europe-west6-docker.pkg.dev
 gsutil mb -p data-flow-test-327119 -c NEARLINE -l europe-west6 -b on gs://data-flow-bucket_1
-gsutil cp schema.json gs://data-flow-bucket_1/30972940/
+gsutil cp ../kafka_scripts/message.json gs://data-flow-bucket_1/30972940/
 gcloud pubsub topics create exchange.ended.events
 
 gcloud iam service-accounts delete data-flow-sa@data-flow-test-327119.iam.gserviceaccount.com
