@@ -1,9 +1,0 @@
-[{
-  "id" : "1234_TEST",
-  "event_id" : "1234",
-  "runner_name" : "TEST_RUNNER",
-  "market_name" : "TEST_MARKET",
-  "back" : 2.0,
-  "lay" : 1.0,
-  "ts" : "2021-10-05T15:30:10.789Z"
-}]
