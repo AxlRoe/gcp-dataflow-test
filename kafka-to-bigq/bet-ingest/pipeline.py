@@ -48,7 +48,7 @@ class QuoteParser(DoFn):
             yield json.loads('{}')
 
         sample = json.loads(data)
-        logging.info("Parsed json " + json.loads(data))
+        logging.info("Parsed json " + ",".join(sample))
         yield sample
 
 
