@@ -90,6 +90,7 @@ class RecordToGCSBucket(beam.PTransform):
                 | "Convert result from match file to readable file " >> fileio.ReadMatches()
                 | "shuffle " >> beam.Reshuffle()
                 | "Convert file to json" >> JsonReader()
+                | "Flatten samples " >> beam.FlatMap(lambda x: x)
         )
 
 def run(bootstrap_servers, args=None):
@@ -101,16 +102,6 @@ def run(bootstrap_servers, args=None):
 
     logging.info("kafka address " + bootstrap_servers)
     with Pipeline(options=pipeline_options) as pipeline:
-        # (
-        #     pipeline
-        #     # Because `timestamp_attribute` is unspecified in `ReadFromPubSub`, Beam
-        #     # binds the publish time returned by the Pub/Sub server for each message
-        #     # to the element's timestamp parameter, accessible via `DoFn.TimestampParam`.
-        #     # https://beam.apache.org/releases/pydoc/current/apache_beam.io.gcp.pubsub.html#apache_beam.io.gcp.pubsub.ReadFromPubSub
-        #     | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
-        #     | "Write to GCS" >> beam.Map(lambda x: logging.info("AHHAHAHAHAHA " + x.decode("UTF-8")))
-        # )
-
         (pipeline
          # | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
          #                 topics=['exchange.ended.events'])
