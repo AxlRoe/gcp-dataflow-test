@@ -26,6 +26,7 @@ SCHEMA = ",".join(
     ]
 )
 
+
 class JsonReader(beam.PTransform):
     def expand(self, pcoll):
         return (
@@ -34,20 +35,21 @@ class JsonReader(beam.PTransform):
                 | "Read json from storage" >> ParDo(QuoteParser())
         )
 
+
 class QuoteParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
         """Processes each windowed element by extracting the message body and its
         publish time into a tuple.
         """
-        #yield json.loads('{"id": "1", "market_name" : "test", "runner_name" : "test", "ts" : "2021-10-05T15:50:00.890Z", "lay": 1.0, "back" : 1.0}')
-        data = file.read_utf8()
-        if not data:
-            logging.info("Json read is null")
-            yield json.loads('{}')
-
-        sample = json.loads(data)
-        logging.info("Parsed json " + json.loads(data))
-        yield sample
+        yield json.loads('{"id": "1", "market_name" : "test", "runner_name" : "test", "ts" : "2021-10-05T15:50:00.890Z", "lay": 1.0, "back" : 1.0}')
+        # logging.info("AHAHHAHAH file " + str(file.read_utf8()))
+        # data = file.read_utf8()
+        # if not data:
+        #     logging.info("Json read is null")
+        #     yield json.loads('{"id": "2", "lay": 2.0}')
+        #
+        # logging.info("AHAHHAHAH data is" + data)
+        # yield json.loads('{"id": "1", "lay": 1.0}')
 
 
 class RecordToGCSBucket(beam.PTransform):
@@ -73,8 +75,7 @@ class RecordToGCSBucket(beam.PTransform):
             message = ast.literal_eval(message_bytes.decode("UTF-8"))
             logging.info("MSG IS " + str(message))
             return 'gs://data-flow-bucket_1/' + message['event_id'] + '/*.json'
-            #return 'C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\' + message['event_id'] + '\\*.json'
-
+            # return 'C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\' + message['event_id'] + '\\*.json'
 
         return (
                 pcoll
@@ -91,7 +92,6 @@ class RecordToGCSBucket(beam.PTransform):
                 | "Convert file to json" >> JsonReader()
         )
 
-
 def run(bootstrap_servers, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
@@ -101,11 +101,20 @@ def run(bootstrap_servers, args=None):
 
     logging.info("kafka address " + bootstrap_servers)
     with Pipeline(options=pipeline_options) as pipeline:
+        # (
+        #     pipeline
+        #     # Because `timestamp_attribute` is unspecified in `ReadFromPubSub`, Beam
+        #     # binds the publish time returned by the Pub/Sub server for each message
+        #     # to the element's timestamp parameter, accessible via `DoFn.TimestampParam`.
+        #     # https://beam.apache.org/releases/pydoc/current/apache_beam.io.gcp.pubsub.html#apache_beam.io.gcp.pubsub.ReadFromPubSub
+        #     | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
+        #     | "Write to GCS" >> beam.Map(lambda x: logging.info("AHHAHAHAHAHA " + x.decode("UTF-8")))
+        # )
+
         (pipeline
          # | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
          #                 topics=['exchange.ended.events'])
          | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
-         #| beam.Create(['{"event_id" : "1234"}'.encode()])
          | "Read files " >> RecordToGCSBucket(5)
          | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
                     projectId='data-flow-test-327119',
@@ -115,7 +124,7 @@ def run(bootstrap_servers, args=None):
                     write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
                     create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
          )
-    logging.info("pipeline ended")
+    logging.info("pipeline started")
 
 
 if __name__ == '__main__':
