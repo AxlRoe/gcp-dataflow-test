@@ -9,4 +9,5 @@ echo "create topics"
 /usr/local/bin/kafka/./kafka-topics.sh --bootstrap-server $ADDRESS:9092 --create --replication-factor 1 --partitions 1 --topic exchange.acknowledge
 /usr/local/bin/kafka/./kafka-topics.sh --bootstrap-server $ADDRESS:9092 --create --replication-factor 1 --partitions 1 --topic exchange.samples
 
+/usr/local/bin/kafka/./kafka-topics.sh --bootstrap-server $ADDRESS:9092 --create --replication-factor 1 --partitions 1 --topic exchange.ended.events
 

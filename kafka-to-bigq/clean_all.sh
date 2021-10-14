@@ -17,11 +17,11 @@ gcloud dataflow jobs list \
   | xargs gcloud dataflow jobs cancel --region "$REGION"
 
 
-gsutil rm $TEMPLATE_PATH
-
 gcloud artifacts docker images delete $TEMPLATE_IMAGE
 
-bq rm -f -t -d kafka_to_bigquery
+gcloud pubsub topics delete exchange.ended.events
 
-gsutil rm -r gs://$BUCKET
+bq rm -r -f -d $PROJECT:kafka_to_bigquery
+
+gsutil -m rm -r gs://$BUCKET_NAME
 
