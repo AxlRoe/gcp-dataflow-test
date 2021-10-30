@@ -21,6 +21,8 @@ pip install -U -r requirements.txt
 
 #export TEMPLATE_PATH="gs://$BUCKET_NAME/streaming-beam.json"
 
+python pipeline.py --bootstrap_servers pippo:9092
+
 python pipeline.py \
 --region europe-west6 \
 --bootstrap_servers $KAFKA_ADDRESS:9092 \

@@ -8,12 +8,14 @@ import json
 import logging
 import random
 
+import pandas as pd
 import apache_beam as beam
-from apache_beam import DoFn, ParDo, Pipeline, WithKeys, GroupByKey
+from apache_beam import DoFn, ParDo, Pipeline, WithKeys, GroupByKey, Row
 from apache_beam.io import fileio, ReadFromPubSub
 from apache_beam.io.gcp import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.transforms import window
+from apache_beam.dataframe.convert import to_dataframe
 
 SCHEMA = ",".join(
     [
@@ -26,17 +28,24 @@ SCHEMA = ",".join(
     ]
 )
 
+class WriteDFToFile(beam.DoFn):
+
+    def process(self, mylist):
+        header = ["id", "ts", "quote", "home", "away", "runnerName", "eventName", "marketName"]
+        mylist.insert(0, header)
+        df = pd.DataFrame(mylist[1:], columns=mylist[0])
+        df.to_csv("data.csv", index=False)
 
 class JsonReader(beam.PTransform):
     def expand(self, pcoll):
         return (
                 pcoll
                 # Bind window info to each element using element timestamp (or publish time).
-                | "Read json from storage" >> ParDo(QuoteParser())
+                | "Read json from storage" >> ParDo(JsonParser())
         )
 
 
-class QuoteParser(DoFn):
+class JsonParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
         """Processes each windowed element by extracting the message body and its
         publish time into a tuple.
@@ -100,23 +109,86 @@ def run(bootstrap_servers, args=None):
         args, streaming=True, save_main_session=True
     )
 
-    logging.info("kafka address " + bootstrap_servers)
-    with Pipeline(options=pipeline_options) as pipeline:
-        (pipeline
-         # | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
-         #                 topics=['exchange.ended.events'])
-         | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
-         | "Read files " >> RecordToGCSBucket(5)
-         | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
-                    projectId='data-flow-test-327119',
-                    datasetId='kafka_to_bigquery',
-                    tableId='transactions'),
-                    schema=SCHEMA,
-                    write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                    create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
-         )
+    # with Pipeline(options=pipeline_options) as pipeline:
+    #     (pipeline
+    #      # | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
+    #      #                 topics=['exchange.ended.events'])
+    #      | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
+    #      | "Read files " >> RecordToGCSBucket(5)
+    #      | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
+    #                 projectId='data-flow-test-327119',
+    #                 datasetId='kafka_to_bigquery',
+    #                 tableId='transactions'),
+    #                 schema=SCHEMA,
+    #                 write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+    #                 create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
+    #      )
+
+    def toRecord (sample_json):
+        return [
+            sample_json["id"],
+            sample_json["ts"],
+            sample_json["quote"],
+            sample_json["home"],
+            sample_json["away"],
+            sample_json["runnerName"],
+            sample_json["eventName"],
+            sample_json["marketName"],
+        ]
+
+    def aJson(stats, sample, quote_type):
+        return {
+            "id": sample["exchangeId"],
+            "ts": sample["ts"],
+            "quote": sample[quote_type],
+            "home": stats["home"]["goals"],
+            "away": stats["away"]["goals"],
+            "runnerName": sample["runnerName"],
+            "eventName": sample["eventName"],
+            "marketName": sample["marketName"],
+        }
+
+    def records(merged_tuple, record_type):
+        data = merged_tuple[1]
+        stats = data["stats"][0]
+        samples = data["samples"]
+        output = []
+        for sample in samples:
+            output.append(toRecord(aJson(stats, sample, record_type)))
+
+        return output
+
+    with beam.Pipeline() as pipeline:
+        samples_tuple = (
+                pipeline
+                | "Matching samples" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\samples\\*.json')
+                | "Reading sampling" >> fileio.ReadMatches()
+                | "Convert sample file to json" >> JsonReader()
+                | "Flatten samples " >> beam.FlatMap(lambda x: x)
+                | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+        )
+
+        stats_tuple = (
+                pipeline
+                | "Matching stats" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\stats\\*.json')
+                | "Reading stats " >> fileio.ReadMatches()
+                | "Convert stats file to json" >> JsonReader()
+                | "Flatten stats " >> beam.FlatMap(lambda x: x)
+                | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+        )
+
+        back_records = (
+            ({'samples': samples_tuple, 'stats': stats_tuple})
+            | 'Merge back record' >> beam.CoGroupByKey()
+            | 'Getting back record' >> beam.Map(lambda x: records(x, "back"))
+            | 'Write to csv' >> beam.ParDo(WriteDFToFile())
+            #| beam.Map(lambda sample: beam.Row(id=sample["id"], ts=sample["ts"], quote=sample["quote"], home=sample["home"], away=sample["away"], runner_name=sample["runnerName"], event_name=sample["eventName"], market_name=sample["marketName"]))
+        )
+
     logging.info("pipeline started")
 
+
+#id;ts;available;away;event_id;home;market_name;matched;quote_diff;runner_name;total_available;total_matched
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
