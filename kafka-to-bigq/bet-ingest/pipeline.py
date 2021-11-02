@@ -7,7 +7,9 @@ import ast
 import json
 import logging
 import random
+from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import apache_beam as beam
 from apache_beam import DoFn, ParDo, Pipeline, WithKeys, GroupByKey, Row
@@ -31,10 +33,14 @@ SCHEMA = ",".join(
 class WriteDFToFile(beam.DoFn):
 
     def process(self, mylist):
-        header = ["id", "ts", "quote", "home", "away", "runnerName", "eventName", "marketName"]
+        header = ["exchangeId", "ts", "back", "lay", "backDiff", "layDiff", "home", "away", "runnerName", "eventName", "eventId", "marketName"]
         mylist.insert(0, header)
         df = pd.DataFrame(mylist[1:], columns=mylist[0])
-        df.to_csv("data.csv", index=False)
+
+        file_exists = Path("data.csv").exists()
+        df.to_csv("data.csv", index=False, header=not file_exists, mode='a' if file_exists else 'w')
+
+        #logging.info("dump to csv")
 
 class JsonReader(beam.PTransform):
     def expand(self, pcoll):
@@ -43,7 +49,6 @@ class JsonReader(beam.PTransform):
                 # Bind window info to each element using element timestamp (or publish time).
                 | "Read json from storage" >> ParDo(JsonParser())
         )
-
 
 class JsonParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
@@ -124,39 +129,66 @@ def run(bootstrap_servers, args=None):
     #                 create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
     #      )
 
-    def toRecord (sample_json):
+    def toRecord(sample_json):
         return [
-            sample_json["id"],
+            sample_json["exchangeId"],
             sample_json["ts"],
-            sample_json["quote"],
+            sample_json["back"],
+            sample_json["lay"],
+            sample_json["layDiff"],
+            sample_json["backDiff"],
             sample_json["home"],
             sample_json["away"],
             sample_json["runnerName"],
             sample_json["eventName"],
+            sample_json["eventId"],
             sample_json["marketName"],
         ]
 
-    def aJson(stats, sample, quote_type):
+    def aJson(stats, sample):
         return {
-            "id": sample["exchangeId"],
+            "exchangeId": sample["exchangeId"],
             "ts": sample["ts"],
-            "quote": sample[quote_type],
+            "back": sample["back"],
+            "lay": sample["lay"],
+            "backDiff": -1,
+            "layDiff": -1,
             "home": stats["home"]["goals"],
             "away": stats["away"]["goals"],
             "runnerName": sample["runnerName"],
             "eventName": sample["eventName"],
+            "eventId": sample["eventId"],
             "marketName": sample["marketName"],
         }
 
-    def records(merged_tuple, record_type):
+    def sample_and_goal_jsons(merged_tuple):
         data = merged_tuple[1]
         stats = data["stats"][0]
         samples = data["samples"]
         output = []
         for sample in samples:
-            output.append(toRecord(aJson(stats, sample, record_type)))
+            output.append(aJson(stats, sample))
 
         return output
+
+    def records(merged_tuple):
+        data = merged_tuple[1]
+        prematch_samples = data["prematch"]
+        sample_and_goals = data["sample_and_goal"]
+        cartesian_product = np.transpose([np.tile(sample_and_goals, len(prematch_samples)), np.repeat(prematch_samples, len(sample_and_goals))])
+
+        output = []
+        for values in cartesian_product:
+            sample_and_goal= values[0]
+            prematch_sample = values[1]
+            layDiff = round(sample_and_goal['lay'] - prematch_sample['back'], 2)
+            backDiff = round(sample_and_goal['back'] - prematch_sample['lay'], 2)
+            sample_and_goal['layDiff'] = layDiff
+            sample_and_goal['backDiff'] = backDiff
+            output.append(toRecord(sample_and_goal))
+
+        return output
+
 
     with beam.Pipeline() as pipeline:
         samples_tuple = (
@@ -177,13 +209,31 @@ def run(bootstrap_servers, args=None):
                 | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
 
-        back_records = (
+        prematch_tuples = (
+                pipeline
+                | "Getting prematch files" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\prematch\\*.json')
+                | "Reading prematch files" >> fileio.ReadMatches()
+                | "Converting prematch files to json" >> JsonReader()
+                | "Flatten prematch " >> beam.FlatMap(lambda x: x)
+                | "add key using runner name " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
+        )
+
+
+        sample_with_goal_tuples = (
             ({'samples': samples_tuple, 'stats': stats_tuple})
             | 'Merge back record' >> beam.CoGroupByKey()
-            | 'Getting back record' >> beam.Map(lambda x: records(x, "back"))
-            | 'Write to csv' >> beam.ParDo(WriteDFToFile())
+            | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
+            | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
             #| beam.Map(lambda sample: beam.Row(id=sample["id"], ts=sample["ts"], quote=sample["quote"], home=sample["home"], away=sample["away"], runner_name=sample["runnerName"], event_name=sample["eventName"], market_name=sample["marketName"]))
         )
+
+        (
+            ({'prematch': prematch_tuples, 'sample_and_goal': sample_with_goal_tuples})
+            | 'Merge by eventId and runnerName' >> beam.CoGroupByKey()
+            | 'pippo' >> beam.Map(lambda x: records(x))
+            | 'Write to csv' >> beam.ParDo(WriteDFToFile())
+        )
+
 
     logging.info("pipeline started")
 
