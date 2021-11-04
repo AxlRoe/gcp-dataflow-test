@@ -9,15 +9,14 @@ import logging
 import random
 from pathlib import Path
 
+import apache_beam as beam
+import dateutil
 import numpy as np
 import pandas as pd
-import apache_beam as beam
-from apache_beam import DoFn, ParDo, Pipeline, WithKeys, GroupByKey, Row
-from apache_beam.io import fileio, ReadFromPubSub
-from apache_beam.io.gcp import bigquery
+from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
+from apache_beam.io import fileio
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.transforms import window
-from apache_beam.dataframe.convert import to_dataframe
 
 SCHEMA = ",".join(
     [
@@ -30,17 +29,21 @@ SCHEMA = ",".join(
     ]
 )
 
+
 class WriteDFToFile(beam.DoFn):
 
     def process(self, mylist):
-        header = ["exchangeId", "ts", "back", "lay", "backDiff", "layDiff", "home", "away", "runnerName", "eventName", "eventId", "marketName"]
+        header = ['id', 'ts', 'back', 'lay', 'back_diff', 'lay_diff', 'hgoal', 'agoal', 'runner_name', 'event_name',
+                  'event_id', 'market_name']
+        # header = ["exchangeId", "ts", "back", "lay", "backDiff", "layDiff", "home", "away", "runnerName", "eventName", "eventId", "marketName"]
         mylist.insert(0, header)
         df = pd.DataFrame(mylist[1:], columns=mylist[0])
 
         file_exists = Path("data.csv").exists()
-        df.to_csv("data.csv", index=False, header=not file_exists, mode='a' if file_exists else 'w')
+        df.to_csv("data.csv", sep=';', index=False, header=not file_exists, mode='a' if file_exists else 'w')
 
-        #logging.info("dump to csv")
+        # logging.info("dump to csv")
+
 
 class JsonReader(beam.PTransform):
     def expand(self, pcoll):
@@ -50,12 +53,13 @@ class JsonReader(beam.PTransform):
                 | "Read json from storage" >> ParDo(JsonParser())
         )
 
+
 class JsonParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
         """Processes each windowed element by extracting the message body and its
         publish time into a tuple.
         """
-        #yield json.loads('{"id": "1", "market_name" : "test", "runner_name" : "test", "ts" : "2021-10-05T15:50:00.890Z", "lay": 1.0, "back" : 1.0}')
+        # yield json.loads('{"id": "1", "market_name" : "test", "runner_name" : "test", "ts" : "2021-10-05T15:50:00.890Z", "lay": 1.0, "back" : 1.0}')
         data = file.read_utf8()
         if not data:
             logging.info("Json read is null")
@@ -107,6 +111,7 @@ class RecordToGCSBucket(beam.PTransform):
                 | "Flatten samples " >> beam.FlatMap(lambda x: x)
         )
 
+
 def run(bootstrap_servers, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
@@ -145,14 +150,31 @@ def run(bootstrap_servers, args=None):
             sample_json["marketName"],
         ]
 
+    class WriteDFToFile2(beam.DoFn):
+
+        def process(self, json):
+            header = ['id', 'ts', 'back', 'lay', 'back_diff', 'lay_diff', 'hgoal', 'agoal', 'runner_name', 'event_name',
+                      'event_id', 'market_name']
+
+            record = toRecord(json)
+            records = []
+            records.insert(0, header)
+            records.insert(1, record)
+            df = pd.DataFrame(records[1:], columns=records[0])
+
+            file_exists = Path("tmp.csv").exists()
+            df.to_csv("tmp.csv", sep=';', index=False, header=not file_exists, mode='a' if file_exists else 'w')
+
+            # logging.info("dump to csv")
+
     def aJson(stats, sample):
         return {
             "exchangeId": sample["exchangeId"],
             "ts": sample["ts"],
             "back": sample["back"],
             "lay": sample["lay"],
-            "backDiff": -1,
-            "layDiff": -1,
+            "backDiff": None,
+            "layDiff": None,
             "home": stats["home"]["goals"],
             "away": stats["away"]["goals"],
             "runnerName": sample["runnerName"],
@@ -173,72 +195,91 @@ def run(bootstrap_servers, args=None):
 
     def records(merged_tuple):
         data = merged_tuple[1]
-        prematch_samples = data["prematch"]
-        sample_and_goals = data["sample_and_goal"]
-        cartesian_product = np.transpose([np.tile(sample_and_goals, len(prematch_samples)), np.repeat(prematch_samples, len(sample_and_goals))])
+
+        prematch_sample = data["prematch"][0]
+        sample_and_goals = list(filter(
+            lambda sg: sg['runnerName'] == prematch_sample['runnerName'] and sg['eventId'] == prematch_sample[
+                'eventId'], data["sample_and_goal"]))
 
         output = []
-        for values in cartesian_product:
-            sample_and_goal= values[0]
-            prematch_sample = values[1]
-            layDiff = round(sample_and_goal['lay'] - prematch_sample['back'], 2)
-            backDiff = round(sample_and_goal['back'] - prematch_sample['lay'], 2)
+        for sample_and_goal in sample_and_goals:
+            pre_back = prematch_sample['back'] if prematch_sample['back'] >= 0 else None
+            lay = sample_and_goal['lay'] if sample_and_goal['lay'] >= 0 else None
+            layDiff = round(lay - pre_back, 2) if lay is not None and pre_back is not None else None
+
+            pre_lay = prematch_sample['lay'] if prematch_sample['lay'] >= 0 else None
+            back = sample_and_goal['back'] if sample_and_goal['back'] >= 0 else None
+            backDiff = round(back - pre_lay, 2) if back is not None and pre_lay is not None else None
+
+            sample_and_goal['lay'] = lay
+            sample_and_goal['back'] = back
             sample_and_goal['layDiff'] = layDiff
             sample_and_goal['backDiff'] = backDiff
             output.append(toRecord(sample_and_goal))
 
         return output
 
-
     with beam.Pipeline() as pipeline:
         samples_tuple = (
                 pipeline
-                | "Matching samples" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\samples\\*.json')
+                | "Matching samples" >> fileio.MatchFiles(
+            'C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\samples\\*.json')
                 | "Reading sampling" >> fileio.ReadMatches()
                 | "Convert sample file to json" >> JsonReader()
                 | "Flatten samples " >> beam.FlatMap(lambda x: x)
+                | "map samples " >> beam.Map(lambda x: x)
                 | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
 
         stats_tuple = (
                 pipeline
-                | "Matching stats" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\stats\\*.json')
+                | "Matching stats" >> fileio.MatchFiles(
+            'C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\stats\\*.json')
                 | "Reading stats " >> fileio.ReadMatches()
                 | "Convert stats file to json" >> JsonReader()
                 | "Flatten stats " >> beam.FlatMap(lambda x: x)
+                | "map stats " >> beam.Map(lambda x: x)
                 | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
 
         prematch_tuples = (
                 pipeline
-                | "Getting prematch files" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\prematch\\*.json')
+                | "Getting prematch files" >> fileio.MatchFiles(
+            'C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\prematch\\*.json')
                 | "Reading prematch files" >> fileio.ReadMatches()
                 | "Converting prematch files to json" >> JsonReader()
                 | "Flatten prematch " >> beam.FlatMap(lambda x: x)
+                | "map prematch " >> beam.Map(lambda x: x)
                 | "add key using runner name " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
         )
 
+        # sample_with_goal_tuples = (
+        #         ({'samples': samples_tuple, 'stats': stats_tuple})
+        #         | 'Merge back record' >> beam.CoGroupByKey()
+        #         | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
+        #         # | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
+        #         | 'Write to csv' >> beam.ParDo(WriteDFToFile2())
+        #     # | beam.Map(lambda sample: beam.Row(id=sample["id"], ts=sample["ts"], quote=sample["quote"], home=sample["home"], away=sample["away"], runner_name=sample["runnerName"], event_name=sample["eventName"], market_name=sample["marketName"]))
+        # )
 
         sample_with_goal_tuples = (
-            ({'samples': samples_tuple, 'stats': stats_tuple})
-            | 'Merge back record' >> beam.CoGroupByKey()
-            | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
-            | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
-            #| beam.Map(lambda sample: beam.Row(id=sample["id"], ts=sample["ts"], quote=sample["quote"], home=sample["home"], away=sample["away"], runner_name=sample["runnerName"], event_name=sample["eventName"], market_name=sample["marketName"]))
+                ({'samples': samples_tuple, 'stats': stats_tuple})
+                | 'Merge back record' >> beam.CoGroupByKey()
+                | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
+                | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
         )
 
         (
-            ({'prematch': prematch_tuples, 'sample_and_goal': sample_with_goal_tuples})
-            | 'Merge by eventId and runnerName' >> beam.CoGroupByKey()
-            | 'pippo' >> beam.Map(lambda x: records(x))
-            | 'Write to csv' >> beam.ParDo(WriteDFToFile())
+                ({'prematch': prematch_tuples, 'sample_and_goal': sample_with_goal_tuples})
+                | 'Merge by eventId and runnerName' >> beam.CoGroupByKey()
+                | 'Remove empty prematch key' >> beam.Filter(
+            lambda merged_tuple: len(merged_tuple[1]['prematch'] and merged_tuple[1]['sample_and_goal']) > 0)
+                | 'pippo' >> beam.Map(lambda x: records(x))
+                | 'Write to csv' >> beam.ParDo(WriteDFToFile())
         )
-
 
     logging.info("pipeline started")
 
-
-#id;ts;available;away;event_id;home;market_name;matched;quote_diff;runner_name;total_available;total_matched
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
@@ -250,3 +291,5 @@ if __name__ == '__main__':
         help='Bootstrap servers for the Kafka cluster. Should be accessible by the runner')
     known_args, pipeline_args = parser.parse_known_args()
     run(known_args.bootstrap_servers, pipeline_args)
+
+    # print(dateutil.parser.isoparse('2021-11-03T17:22:59.5850463'))
