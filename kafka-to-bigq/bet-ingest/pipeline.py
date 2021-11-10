@@ -10,8 +10,6 @@ import random
 from pathlib import Path
 
 import apache_beam as beam
-import dateutil
-import numpy as np
 import pandas as pd
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.io import fileio
@@ -33,7 +31,7 @@ SCHEMA = ",".join(
 class WriteDFToFile(beam.DoFn):
 
     def process(self, mylist):
-        header = ['id', 'ts', 'back', 'lay', 'back_diff', 'lay_diff', 'hgoal', 'agoal', 'runner_name', 'event_name',
+        header = ['id', 'ts', 'delta', 'favourite', 'back', 'lay', 'start_back', 'start_lay', 'hgoal', 'agoal', 'runner_name', 'event_name',
                   'event_id', 'market_name']
         # header = ["exchangeId", "ts", "back", "lay", "backDiff", "layDiff", "home", "away", "runnerName", "eventName", "eventId", "marketName"]
         mylist.insert(0, header)
@@ -138,10 +136,12 @@ def run(bootstrap_servers, args=None):
         return [
             sample_json["exchangeId"],
             sample_json["ts"],
+            sample_json["favourite"],
+            sample_json["delta"],
             sample_json["back"],
             sample_json["lay"],
-            sample_json["layDiff"],
-            sample_json["backDiff"],
+            sample_json["startLay"],
+            sample_json["startBack"],
             sample_json["home"],
             sample_json["away"],
             sample_json["runnerName"],
@@ -171,10 +171,12 @@ def run(bootstrap_servers, args=None):
         return {
             "exchangeId": sample["exchangeId"],
             "ts": sample["ts"],
+            "delta": None,
+            "favourite": None,
             "back": sample["back"],
             "lay": sample["lay"],
-            "backDiff": None,
-            "layDiff": None,
+            "startLay": None,
+            "startBack": None,
             "home": stats["home"]["goals"],
             "away": stats["away"]["goals"],
             "runnerName": sample["runnerName"],
@@ -193,7 +195,7 @@ def run(bootstrap_servers, args=None):
 
         return output
 
-    def records(merged_tuple):
+    def tuple_to_json(merged_tuple):
         data = merged_tuple[1]
 
         prematch_sample = data["prematch"][0]
@@ -201,23 +203,56 @@ def run(bootstrap_servers, args=None):
             lambda sg: sg['runnerName'] == prematch_sample['runnerName'] and sg['eventId'] == prematch_sample[
                 'eventId'], data["sample_and_goal"]))
 
-        output = []
         for sample_and_goal in sample_and_goals:
             pre_back = prematch_sample['back'] if prematch_sample['back'] >= 0 else None
             lay = sample_and_goal['lay'] if sample_and_goal['lay'] >= 0 else None
-            layDiff = round(lay - pre_back, 2) if lay is not None and pre_back is not None else None
+            # layDiff = round(lay - pre_back, 2) if lay is not None and pre_back is not None else None
 
             pre_lay = prematch_sample['lay'] if prematch_sample['lay'] >= 0 else None
             back = sample_and_goal['back'] if sample_and_goal['back'] >= 0 else None
-            backDiff = round(back - pre_lay, 2) if back is not None and pre_lay is not None else None
+            # backDiff = round(back - pre_lay, 2) if back is not None and pre_lay is not None else None
 
             sample_and_goal['lay'] = lay
             sample_and_goal['back'] = back
-            sample_and_goal['layDiff'] = layDiff
-            sample_and_goal['backDiff'] = backDiff
-            output.append(toRecord(sample_and_goal))
+            sample_and_goal['startLay'] = pre_lay
+            sample_and_goal['startBack'] = pre_back
+
+        return sample_and_goal
+
+
+    def records(merged_tuple):
+
+        data = merged_tuple[1]
+
+        player_1 = {}
+        player_2 = {}
+
+        if data["players"][0]['home'] == data["players"][0]['runnerName']:
+            player_1 = data["players"][0]
+
+        if data["players"][0]['guest'] == data["players"][0]['runnerName']:
+            player_2 = data["players"][0]
+
+        if data["players"][1]['home'] == data["players"][1]['runnerName']:
+            player_1 = data["players"][1]
+
+        if data["players"][1]['guest'] == data["players"][1]['runnerName']:
+            player_2 = data["players"][1]
+
+        delta = abs(player_1['lay'] - player_2['lay'])
+        favourite = 'HOME' if player_1['lay'] < player_2['lay'] else 'AWAY'
+        pre_sample_and_goals = data["pre_samples_and_goal"]
+
+        output = []
+        for pre_sample_and_goal in pre_sample_and_goals:
+            pre_sample_and_goal['favourite'] = favourite
+            pre_sample_and_goal['delta'] = delta
+            output.append(toRecord(pre_sample_and_goal))
 
         return output
+
+    def prediction_filter(prematch_tuple):
+        return prematch_tuple[1]['marketName'] == 'MATCH_ODDS' and prematch_tuple[1]['runnerName'] != 'Pareggio'
 
     with beam.Pipeline() as pipeline:
         samples_tuple = (
@@ -253,6 +288,13 @@ def run(bootstrap_servers, args=None):
                 | "add key using runner name " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
         )
 
+        player_tuples = (
+                prematch_tuples
+                | "Filter match odds values" >> beam.Filter(lambda prematch_tuple: prediction_filter(prematch_tuple))
+                | "get player jsons from tuples" >> beam.Map(lambda prematch_tuple: prematch_tuple[1])
+                | "Player tuples " >> WithKeys(lambda player_json: player_json['eventId'])
+        )
+
         # sample_with_goal_tuples = (
         #         ({'samples': samples_tuple, 'stats': stats_tuple})
         #         | 'Merge back record' >> beam.CoGroupByKey()
@@ -269,12 +311,18 @@ def run(bootstrap_servers, args=None):
                 | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
         )
 
-        (
+        pre_samples_goal_tuples = (
                 ({'prematch': prematch_tuples, 'sample_and_goal': sample_with_goal_tuples})
                 | 'Merge by eventId and runnerName' >> beam.CoGroupByKey()
-                | 'Remove empty prematch key' >> beam.Filter(
-            lambda merged_tuple: len(merged_tuple[1]['prematch'] and merged_tuple[1]['sample_and_goal']) > 0)
-                | 'pippo' >> beam.Map(lambda x: records(x))
+                | 'Remove empty prematch key' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['prematch']) > 0 and len(merged_tuple[1]['sample_and_goal']) > 0)
+                | 'convert join tuple to json ' >> beam.Map(lambda merged_tuple: tuple_to_json(merged_tuple))
+                | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['eventId'])
+        )
+
+        (
+                ({'players': player_tuples, 'pre_samples_and_goal': pre_samples_goal_tuples})
+                | 'Merge by eventId' >> beam.CoGroupByKey()
+                | 'Convert join to records' >> beam.Map(lambda x: records(x))
                 | 'Write to csv' >> beam.ParDo(WriteDFToFile())
         )
 

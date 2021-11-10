@@ -1,4 +1,5 @@
 import dateutil
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot
 from matplotlib.dates import DateFormatter
@@ -39,53 +40,64 @@ date_form = DateFormatter("%H:%M")
 mydateparser = lambda x: dateutil.parser.isoparse(x)
 df = pd.read_csv('bet.csv', sep=";",
                  parse_dates=['ts'], date_parser=mydateparser,
-                 usecols=['id','ts','back','lay','back_diff','lay_diff','hgoal','agoal','runner_name','event_name','event_id','market_name'])
+                 usecols=['id','ts','back','lay','start_back','start_lay','hgoal','agoal','runner_name','event_name','event_id','market_name'])
 
 df['ts'] = df['ts'].apply(lambda x: (x.replace(second=0)))
 df = df.sort_values(by=['ts'])
 df_match = df[['ts', 'event_id', 'agoal', 'hgoal']]
+df = df.drop('agoal', 1)
+df = df.drop('hgoal', 1)
 
-#event_filter = 31019386
-events = [31019506] #df.event_id.unique()
+#df = df[(df['event_id'] == 31019505)]
+event_df = df[['event_id','event_name']].drop_duplicates()
 
 #market = 'BOTH_TEAMS_TO_SCORE'
 
-for event in events:
+for index, row in event_df.iterrows():
 
-    #TODO FIX HERE
-    df = df[(df['event_id'] == event)]
-    markets = list(filter(lambda x: x != 'CORRECT_SCORE', df.market_name.unique()))
+    event = row["event_id"]
+    event_name = row["event_name"]
+
+    df_by_event = df[(df['event_id'] == event)]
+    markets = list(filter(lambda x: x != 'CORRECT_SCORE', df_by_event.market_name.unique()))
 
     for market in markets:
-        fig, axes = pyplot.subplots(figsize=(15, 5))
-        df_bymarket = df[(df['market_name'] == market)]
+        df_bymarket = df_by_event[(df_by_event['market_name'] == market)]
         for runner in df_bymarket.runner_name.unique():
+            fig, axes = pyplot.subplots(figsize=(15, 5))
             df_byrunner = df_bymarket[(df_bymarket['runner_name'] == runner)]
             ts_axes = build_ts_axes(df_byrunner, df_match)
             df_byrunner = df_byrunner.sort_values(by=['ts'])
-            quote_axes = df_byrunner[["lay"]]
+
+            # df['quote_diff'] = df['quote_diff'].apply(lambda x: np.log10(x) if x > 0 else x)
+
+            quote_axes = df_byrunner[["lay"]]#.apply(lambda x: np.log10(x))
             axes.plot(ts_axes, quote_axes, label=runner)
+            pre_lay_quote_axes = df_byrunner[["start_lay"]]#.apply(lambda x: np.log10(x))
+            axes.plot(ts_axes, pre_lay_quote_axes, label="pre " + runner, linestyle='dashdot')
 
-        goals_series = df_match[(df_match['event_id'] == event)].drop_duplicates()
-        ts_axes = goals_series[["ts"]]
-        ts_axes = ts_axes.sort_values(by=['ts'])
+            goals_series_df = df_match[(df_match['event_id'] == event)].drop_duplicates()
+            runner_and_goal = pd.merge(goals_series_df, df_byrunner, on=["ts", "event_id"])
 
-        ax_twin = axes.twinx()
-        ax_twin.set_ylabel('goal')
-        ax_twin.plot(ts_axes, goals_series[['hgoal']], label='hgoal', color='red', linestyle='--', alpha=.8)
-        ax_twin.plot(ts_axes, goals_series[['agoal']], label='agoal', color='green', linestyle='--', alpha=.8)
-        ax_twin.legend(loc='upper left')
+            ts_axes = runner_and_goal[["ts"]]
+            ts_axes = ts_axes.sort_values(by=['ts'])
 
-        # set title and y label
-        axes.set_title(market, fontsize=12)
-        axes.set_ylabel("quote (log)")
-        axes.legend(loc='upper center')
+            ax_twin = axes.twinx()
+            ax_twin.set_ylabel('goal')
+            ax_twin.plot(ts_axes, runner_and_goal[['hgoal']], label='hgoal', color='red', linestyle='--', alpha=.8)
+            ax_twin.plot(ts_axes, runner_and_goal[['agoal']], label='agoal', color='green', linestyle='--', alpha=.8)
+            ax_twin.legend(loc='upper left')
 
-        axes.xaxis.grid(b=True, which='major', color='black', linestyle='--', alpha=1)
-        axes.xaxis.set_major_formatter(date_form)
+            # set title and y label
+            axes.set_title(event_name + " - " + market + "_" + runner, fontsize=12)
+            axes.set_ylabel("lay ")
+            axes.legend(loc='upper center')
 
-        #pyplot.tight_layout()
-        #pyplot.show()
-        pyplot.savefig("images/" + str(event) + "_" + market + ".png")
-        print("charts for event " + str(event) + "_" + market + ".png")
+            axes.xaxis.grid(b=True, which='major', color='black', linestyle='--', alpha=1)
+            axes.xaxis.set_major_formatter(date_form)
+
+            #pyplot.tight_layout()
+            #pyplot.show()
+            pyplot.savefig("images/" + str(event) + "_" + runner.replace(" ","_").replace(".","").replace(",","") + ".png")
+            print("charts for event " + str(event) + "_" + runner.replace(" ","_").replace(".","").replace(",","") + ".png")
 
