@@ -33,7 +33,7 @@ class WriteDFToFile(beam.DoFn):
     def process(self, mylist):
         header = ['id', 'ts', 'delta', 'favourite', 'back', 'lay', 'start_back', 'start_lay', 'hgoal', 'agoal', 'runner_name', 'event_name',
                   'event_id', 'market_name']
-        # header = ["exchangeId", "ts", "back", "lay", "backDiff", "layDiff", "home", "away", "runnerName", "eventName", "eventId", "marketName"]
+        # header = ["exchangeId", "ts", "back", "lay", "backDiff", "layDiff", "home", "guest", "runnerName", "eventName", "eventId", "marketName"]
         mylist.insert(0, header)
         df = pd.DataFrame(mylist[1:], columns=mylist[0])
 
@@ -63,7 +63,13 @@ class JsonParser(DoFn):
             logging.info("Json read is null")
             yield json.loads('{}')
 
-        sample = json.loads(data)
+        try:
+            sample = json.loads(data)
+        except BaseException as err:
+            print(f"Unexpected {err=}, {type(err)=}")
+            raise
+
+
         logging.info("Parsed json ")
         yield sample
 
@@ -136,14 +142,14 @@ def run(bootstrap_servers, args=None):
         return [
             sample_json["exchangeId"],
             sample_json["ts"],
-            sample_json["favourite"],
             sample_json["delta"],
+            sample_json["favourite"],
             sample_json["back"],
             sample_json["lay"],
             sample_json["startLay"],
             sample_json["startBack"],
-            sample_json["home"],
-            sample_json["away"],
+            sample_json["hgoal"],
+            sample_json["agoal"],
             sample_json["runnerName"],
             sample_json["eventName"],
             sample_json["eventId"],
@@ -177,8 +183,10 @@ def run(bootstrap_servers, args=None):
             "lay": sample["lay"],
             "startLay": None,
             "startBack": None,
-            "home": stats["home"]["goals"],
-            "away": stats["away"]["goals"],
+            "home": sample["home"],
+            "hgoal": stats["home"]["goals"],
+            "guest": sample["guest"],
+            "agoal": stats["away"]["goals"],
             "runnerName": sample["runnerName"],
             "eventName": sample["eventName"],
             "eventId": sample["eventId"],
@@ -187,7 +195,11 @@ def run(bootstrap_servers, args=None):
 
     def sample_and_goal_jsons(merged_tuple):
         data = merged_tuple[1]
-        stats = data["stats"][0]
+
+        try:
+            stats = data["stats"][0]
+        except:
+            print('AAAARHG')
         samples = data["samples"]
         output = []
         for sample in samples:
@@ -195,14 +207,15 @@ def run(bootstrap_servers, args=None):
 
         return output
 
-    def tuple_to_json(merged_tuple):
+    def tuple_to_jsons(merged_tuple):
         data = merged_tuple[1]
 
         prematch_sample = data["prematch"][0]
         sample_and_goals = list(filter(
-            lambda sg: sg['runnerName'] == prematch_sample['runnerName'] and sg['eventId'] == prematch_sample[
-                'eventId'], data["sample_and_goal"]))
+            lambda sg: sg['runnerName'] == prematch_sample['runnerName']
+                       and sg['eventId'] == prematch_sample['eventId'], data["sample_and_goal"]))
 
+        output = []
         for sample_and_goal in sample_and_goals:
             pre_back = prematch_sample['back'] if prematch_sample['back'] >= 0 else None
             lay = sample_and_goal['lay'] if sample_and_goal['lay'] >= 0 else None
@@ -217,7 +230,9 @@ def run(bootstrap_servers, args=None):
             sample_and_goal['startLay'] = pre_lay
             sample_and_goal['startBack'] = pre_back
 
-        return sample_and_goal
+            output.append(sample_and_goal)
+
+        return output
 
 
     def records(merged_tuple):
@@ -247,6 +262,10 @@ def run(bootstrap_servers, args=None):
         for pre_sample_and_goal in pre_sample_and_goals:
             pre_sample_and_goal['favourite'] = favourite
             pre_sample_and_goal['delta'] = delta
+            if pre_sample_and_goal['marketName'] == 'MATCH_ODDS':
+                if pre_sample_and_goal['runnerName'] != 'Pareggio':
+                    pre_sample_and_goal['runnerName'] = 'HOME' if pre_sample_and_goal['runnerName'] == pre_sample_and_goal['home'] else 'AWAY'
+
             output.append(toRecord(pre_sample_and_goal))
 
         return output
@@ -307,6 +326,7 @@ def run(bootstrap_servers, args=None):
         sample_with_goal_tuples = (
                 ({'samples': samples_tuple, 'stats': stats_tuple})
                 | 'Merge back record' >> beam.CoGroupByKey()
+                | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
                 | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
                 | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
         )
@@ -315,7 +335,7 @@ def run(bootstrap_servers, args=None):
                 ({'prematch': prematch_tuples, 'sample_and_goal': sample_with_goal_tuples})
                 | 'Merge by eventId and runnerName' >> beam.CoGroupByKey()
                 | 'Remove empty prematch key' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['prematch']) > 0 and len(merged_tuple[1]['sample_and_goal']) > 0)
-                | 'convert join tuple to json ' >> beam.Map(lambda merged_tuple: tuple_to_json(merged_tuple))
+                | 'convert join tuple to json ' >> beam.FlatMap(lambda merged_tuple: tuple_to_jsons(merged_tuple))
                 | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['eventId'])
         )
 
