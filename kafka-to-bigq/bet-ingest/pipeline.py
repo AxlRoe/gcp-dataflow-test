@@ -31,7 +31,7 @@ SCHEMA = ",".join(
 class WriteDFToFile(beam.DoFn):
 
     def process(self, mylist):
-        header = ['id', 'ts', 'delta', 'favourite', 'back', 'lay', 'start_back', 'start_lay', 'hgoal', 'agoal', 'runner_name', 'event_name',
+        header = ['id', 'ts', 'delta', 'prediction', 'back', 'lay', 'start_back', 'start_lay', 'hgoal', 'agoal', 'runner_name', 'event_name',
                   'event_id', 'market_name']
         # header = ["exchangeId", "ts", "back", "lay", "backDiff", "layDiff", "home", "guest", "runnerName", "eventName", "eventId", "marketName"]
         mylist.insert(0, header)
@@ -143,7 +143,7 @@ def run(bootstrap_servers, args=None):
             sample_json["exchangeId"],
             sample_json["ts"],
             sample_json["delta"],
-            sample_json["favourite"],
+            sample_json["prediction"],
             sample_json["back"],
             sample_json["lay"],
             sample_json["startLay"],
@@ -178,7 +178,7 @@ def run(bootstrap_servers, args=None):
             "exchangeId": sample["exchangeId"],
             "ts": sample["ts"],
             "delta": None,
-            "favourite": None,
+            "prediction": None,
             "back": sample["back"],
             "lay": sample["lay"],
             "startLay": None,
@@ -200,9 +200,14 @@ def run(bootstrap_servers, args=None):
             stats = data["stats"][0]
         except:
             print('AAAARHG')
+
         samples = data["samples"]
         output = []
         for sample in samples:
+            if not stats["home"] or not stats["away"]:
+                print("missing values for stats, event: " + sample["exchangeId"])
+                continue
+
             output.append(aJson(stats, sample))
 
         return output
@@ -255,12 +260,12 @@ def run(bootstrap_servers, args=None):
             player_2 = data["players"][1]
 
         delta = abs(player_1['lay'] - player_2['lay'])
-        favourite = 'HOME' if player_1['lay'] < player_2['lay'] else 'AWAY'
+        prediction = 'HOME' if player_1['lay'] < player_2['lay'] else 'AWAY'
         pre_sample_and_goals = data["pre_samples_and_goal"]
 
         output = []
         for pre_sample_and_goal in pre_sample_and_goals:
-            pre_sample_and_goal['favourite'] = favourite
+            pre_sample_and_goal['prediction'] = prediction
             pre_sample_and_goal['delta'] = delta
             if pre_sample_and_goal['marketName'] == 'MATCH_ODDS':
                 if pre_sample_and_goal['runnerName'] != 'Pareggio':
