@@ -1,81 +1,9 @@
-del /f data.csv
-rmdir /S /q prematch stats samples
-mkdir stats samples prematch
-
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_18_12\recover\live_* samples
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_18_12\recover\0m\prematch_* prematch
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_18_12\recover\stats\stats_* stats
-
-rem virtualenv env
-rem env\Scripts\activate.exe
-rem pip install -U -r requirements.txt
-
-python pipeline.py --bootstrap_servers localhost:9092
-
-copy data.csv C:\Users\mmarini\MyGit\py-bet-analyzer\ml\csv\bet_18_12.csv
-
-del /f data.csv
-rmdir /S /q prematch stats samples
-mkdir stats samples prematch
-
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_19_12\recover\live_* samples
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_19_12\recover\0m\prematch_* prematch
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_19_12\recover\stats\stats_* stats
-
-rem virtualenv env
-rem env\Scripts\activate.exe
-rem pip install -U -r requirements.txt
-
-python pipeline.py --bootstrap_servers localhost:9092
-
-copy data.csv C:\Users\mmarini\MyGit\py-bet-analyzer\ml\csv\bet_19_12.csv
-
-del /f data.csv
-rmdir /S /q prematch stats samples
-mkdir stats samples prematch
-
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_21_12\recover\live_* samples
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_21_12\recover\0m\prematch_* prematch
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_21_12\recover\stats\stats_* stats
-
-rem virtualenv env
-rem env\Scripts\activate.exe
-rem pip install -U -r requirements.txt
-
-python pipeline.py --bootstrap_servers localhost:9092
-
-copy data.csv C:\Users\mmarini\MyGit\py-bet-analyzer\ml\csv\bet_21_12.csv
-
-del /f data.csv
-rmdir /S /q prematch stats samples
-mkdir stats samples prematch
-
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_22_12\recover\live_* samples
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_22_12\recover\0m\prematch_* prematch
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_22_12\recover\stats\stats_* stats
-
-rem virtualenv env
-rem env\Scripts\activate.exe
-rem pip install -U -r requirements.txt
-
-python pipeline.py --bootstrap_servers localhost:9092
-
-copy data.csv C:\Users\mmarini\MyGit\py-bet-analyzer\ml\csv\bet_22_12.csv
-
-
-del /f data.csv
-rmdir /S /q prematch stats samples
-mkdir stats samples prematch
-
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_23_12\recover\live_* samples
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_23_12\recover\0m\prematch_* prematch
-copy C:\Users\mmarini\MyGit\betanalyzer\exchange\dump_23_12\recover\stats\stats_* stats
-
-rem virtualenv env
-rem env\Scripts\activate.exe
-rem pip install -U -r requirements.txt
-
-python pipeline.py --bootstrap_servers localhost:9092
-
-copy data.csv C:\Users\mmarini\MyGit\py-bet-analyzer\ml\csv\bet_23_12.csv
-
+@echo off
+rem call copy_data.bat 12_26 2021-12-26T23:00:00 2021-12-26T00:00:00
+call copy_data.bat 12_27 2021-12-27T23:00:00 2021-12-27T00:00:00
+rem call copy_data.bat 12_28 2021-12-28T23:00:00 2021-12-28T00:00:00
+rem call copy_data.bat 12_29 2021-12-29T23:00:00 2021-12-29T00:00:00
+rem call copy_data.bat 12_30 2021-12-30T23:00:00 2021-12-30T00:00:00
+rem call copy_data.bat 12_31 2021-12-31T23:00:00 2021-12-31T00:00:00
+rem call copy_data.bat 01_02 2022-01-02T23:00:00 2022-01-02T00:00:00
+rem call copy_data.bat 01_03 2022-01-03T23:00:00 2022-01-03T00:00:00

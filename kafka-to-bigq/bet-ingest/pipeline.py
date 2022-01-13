@@ -31,6 +31,10 @@ SCHEMA = ",".join(
 class WriteDFToFile(beam.DoFn):
 
     def process(self, mylist):
+
+        if not mylist:
+            return
+
         header = ['id', 'ts', 'delta', 'prediction', 'back', 'lay', 'start_back', 'start_lay', 'hgoal', 'agoal', 'runner_name', 'event_name',
                   'event_id', 'market_name']
         # header = ["exchangeId", "ts", "back", "lay", "backDiff", "layDiff", "home", "guest", "runnerName", "eventName", "eventId", "marketName"]
@@ -243,9 +247,14 @@ def run(bootstrap_servers, args=None):
     def records(merged_tuple):
 
         data = merged_tuple[1]
+        pre_sample_and_goals = data["pre_samples_and_goal"]
 
         player_1 = {}
         player_2 = {}
+
+        if len(data["players"]) < 2:
+            logging.warn("Missing players for " + merged_tuple[0])
+            return []
 
         if data["players"][0]['home'] == data["players"][0]['runnerName']:
             player_1 = data["players"][0]
@@ -261,7 +270,6 @@ def run(bootstrap_servers, args=None):
 
         delta = abs(player_1['lay'] - player_2['lay'])
         prediction = 'HOME' if player_1['lay'] < player_2['lay'] else 'AWAY'
-        pre_sample_and_goals = data["pre_samples_and_goal"]
 
         output = []
         for pre_sample_and_goal in pre_sample_and_goals:
@@ -275,8 +283,17 @@ def run(bootstrap_servers, args=None):
 
         return output
 
-    def prediction_filter(prematch_tuple):
-        return prematch_tuple[1]['marketName'] == 'MATCH_ODDS' and prematch_tuple[1]['runnerName'] != 'Pareggio'
+    def debug_filter(prematch_tuple):
+        json = prematch_tuple[1]
+        if json['eventId'] == '31134143' and json['marketName'] == 'MATCH_ODDS':
+            print("************ Found " + str(prematch_tuple[0]))
+            return True
+
+        return False
+
+    def home_or_guest_filter(prematch_tuple):
+        json = prematch_tuple[1]
+        return json['marketName'] == 'MATCH_ODDS' and json['runnerName'] != 'Pareggio'
 
     with beam.Pipeline() as pipeline:
         samples_tuple = (
@@ -312,9 +329,17 @@ def run(bootstrap_servers, args=None):
                 | "add key using runner name " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
         )
 
+        # d = (
+        #         prematch_tuples
+        #         | "debug" >> beam.Filter(lambda prematch_tuple: debug_filter(prematch_tuple))
+        #         | "get player" >> beam.Map(lambda prematch_tuple: prematch_tuple[1])
+        #         | 'To string' >> beam.ToString.Kvs()
+        #         | beam.Map(print)
+        # )
+
         player_tuples = (
                 prematch_tuples
-                | "Filter match odds values" >> beam.Filter(lambda prematch_tuple: prediction_filter(prematch_tuple))
+                | "Filter match odds values" >> beam.Filter(lambda prematch_tuple: home_or_guest_filter(prematch_tuple))
                 | "get player jsons from tuples" >> beam.Map(lambda prematch_tuple: prematch_tuple[1])
                 | "Player tuples " >> WithKeys(lambda player_json: player_json['eventId'])
         )
