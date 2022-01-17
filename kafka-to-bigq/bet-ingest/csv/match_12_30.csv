@@ -1,0 +1,5 @@
+event_id;competition_id;cutoff_date;delta;event_name;favourite;guest;home
+31130439;99;2021-12-30 21:00:00;2.94;Porto - Benfica;HOME;Benfica;Porto
+31139214;10932509;2021-12-30 20:15:00;8.17;Manchester United - Burnley;HOME;Burnley;Manchester United
+31130423;99;2021-12-30 19:00:00;3.79;Arouca - Braga;AWAY;Braga;Arouca
+31139220;10932509;2021-12-30 19:30:00;;Everton - Newcastle;AWAY;Newcastle;Everton

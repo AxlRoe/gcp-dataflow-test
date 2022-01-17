@@ -1,0 +1,15 @@
+event_id;competition_id;cutoff_date;delta;event_name;favourite;guest;home
+31128329;55;2022-01-08 16:00:00;;Lille - Lorient;;;
+31128335;55;2022-01-08 20:00:00;0.04;Lens - Rennes;AWAY;Rennes;Lens
+31139588;117;2022-01-08 20:00:00;8.19;Real Madrid - Valencia;HOME;Valencia;Real Madrid
+31145083;99;2022-01-08 20:30:00;1.65;Boavista - Tondela;HOME;Tondela;Boavista
+31145109;99;2022-01-08 18:00:00;18.77;Estoril - Porto;AWAY;Porto;Estoril
+31132781;59;2022-01-08 17:30:00;1.98;Francoforte - Dortmund;AWAY;Dortmund;Francoforte
+31139585;117;2022-01-08 17:30:00;3.53;Granada - Barcellona;AWAY;Barcellona;Granada
+31145110;99;2022-01-08 15:30:00;0.8;Vizela - Moreirense;HOME;Moreirense;Vizela
+31139591;117;2022-01-08 15:15:00;3.16;Real Sociedad - Celta Vigo;HOME;Celta Vigo;Real Sociedad
+31132263;59;2022-01-08 14:30:00;1.35;Furth - Stoccarda;AWAY;Stoccarda;Furth
+31132279;59;2022-01-08 14:30:00;3.68;Friburgo - Arminia Bielefeld;HOME;Arminia Bielefeld;Friburgo
+31132771;59;2022-01-08 14:30:00;2.94;Leverkusen - Union Berlino;HOME;Union Berlino;Leverkusen
+31132775;59;2022-01-08 14:30:00;3.4;RB Lipsia - Magonza;HOME;Magonza;RB Lipsia
+31132778;59;2022-01-08 14:30:00;5.42;Hoffenheim - Augusta;HOME;Augusta;Hoffenheim

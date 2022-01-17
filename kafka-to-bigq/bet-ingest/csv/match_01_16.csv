@@ -1,0 +1,24 @@
+event_id;competition_id;cutoff_date;delta;event_name;favourite;guest;home
+31140430;9404054;2022-01-16 13:30:00;7.33;FC Groningen - PSV;AWAY;PSV;FC Groningen
+31140431;9404054;2022-01-16 13:30:00;0.42;Cambuur Leeuwarden - Sparta Rotterdam;AWAY;Sparta Rotterdam;Cambuur Leeuwarden
+31143807;55;2022-01-16 14:00:00;6.7;Monaco - Clermont;HOME;Clermont;Monaco
+31143810;55;2022-01-16 14:00:00;4.43;Reims - Metz;HOME;Metz;Reims
+31143812;55;2022-01-16 14:00:00;2.06;Strasburgo - Montpellier;HOME;Montpellier;Strasburgo
+31143815;55;2022-01-16 14:00:00;1.16;Lorient - Angers;HOME;Angers;Lorient
+31150337;10932509;2022-01-16 14:00:00;13.71;Liverpool - Brentford;HOME;Brentford;Liverpool
+31150365;10932509;2022-01-16 14:00:00;3.66;West Ham - Leeds;HOME;Leeds;West Ham
+31162591;81;2022-01-16 14:00:00;0.38;Venezia - Empoli;AWAY;Empoli;Venezia
+31139352;59;2022-01-16 14:30:00;0.57;Augusta - Francoforte;AWAY;Francoforte;Augusta
+31162588;81;2022-01-16 17:00:00;8.4;Roma - Cagliari;HOME;Cagliari;Roma
+31140429;9404054;2022-01-16 15:45:00;7.52;Fortuna Sittard - Alkmaar;AWAY;Alkmaar;Fortuna Sittard
+31143814;55;2022-01-16 16:05:00;3;Troyes - Lione;AWAY;Lione;Troyes
+31158846;99;2022-01-16 18:30:00;2.36;Famalicao - Ferreira;HOME;Ferreira;Famalicao
+31139367;59;2022-01-16 16:30:00;2.95;Arminia Bielefeld - Furth;HOME;Furth;Arminia Bielefeld
+31160108;99;2022-01-16 20:30:00;20.75;Belenenses - Porto;AWAY;Porto;Belenenses
+31143806;55;2022-01-16 19:45:00;1.22;Marsiglia - Lille;HOME;Lille;Marsiglia
+31162597;81;2022-01-16 19:45:00;1.03;Atalanta - Inter;AWAY;Inter;Atalanta
+31157795;99;2022-01-16 18:00:00;10.6;Vizela - Sporting;AWAY;Sporting;Vizela
+31158843;99;2022-01-16 15:30:00;3.49;Santa Clara - Tondela;HOME;Tondela;Santa Clara
+31155998;12199689;2022-01-16 15:15:00;1.07;Spal - Benevento;AWAY;Benevento;Spal
+31155999;12199689;2022-01-16 15:15:00;3.55;Pordenone - Lecce;AWAY;Lecce;Pordenone
+31156000;12199689;2022-01-16 15:15:00;1.15;AC Monza - Perugia;HOME;Perugia;AC Monza

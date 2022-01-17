@@ -1,0 +1,6 @@
+event_id;competition_id;cutoff_date;delta;event_name;favourite;guest;home
+31143887;55;2022-01-14 20:00:00;3.83;Nizza - Nantes;HOME;Nantes;Nizza
+31150363;10932509;2022-01-14 20:00:00;1.9;Brighton - Crystal Palace;HOME;Crystal Palace;Brighton
+31140433;9404054;2022-01-14 19:00:00;0.43;Zwolle - Willem II;HOME;Willem II;Zwolle
+31139239;59;2022-01-14 19:30:00;5.71;Dortmund - Friburgo;HOME;Friburgo;Dortmund
+31155014;12199689;2022-01-14 19:30:00;2.88;Ternana - Ascoli;HOME;Ascoli;Ternana

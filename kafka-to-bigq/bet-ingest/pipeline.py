@@ -10,8 +10,8 @@ import random
 from pathlib import Path
 
 import apache_beam as beam
-import pandas as pd
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
+from apache_beam.dataframe.convert import to_dataframe
 from apache_beam.io import fileio
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.transforms import window
@@ -27,24 +27,52 @@ SCHEMA = ",".join(
     ]
 )
 
+def aJson(stats, sample):
+    return {
+        "exchangeId": sample["exchangeId"],
+        "runnerId": str(sample["runnerId"]),
+        "ts": sample["ts"],
+        "delta": float("NaN"),
+        "prediction": None,
+        "back": round(sample["back"] * 100) / 100,
+        "lay": round(sample["lay"] * 100) / 100,
+        "startLay": float("NaN"),
+        "startBack": float("NaN"),
+        "home": sample["home"],
+        "hgoal": stats["home"]["goals"],
+        "guest": sample["guest"],
+        "agoal": stats["away"]["goals"],
+        "runnerName": sample["runnerName"],
+        "eventName": sample["eventName"],
+        "eventId": sample["eventId"],
+        "marketName": sample["marketName"],
+        "marketId": sample["marketId"],
+        "totalAvailable": round(sample["totalAvailable"] * 100) / 100,
+        "totalMatched": round(sample["totalMatched"] * 100) / 100,
+        "matched": round(sample["matched"] * 100) / 100,
+        "available": round(sample["available"] * 100) / 100,
+    }
 
-class WriteDFToFile(beam.DoFn):
 
-    def process(self, mylist):
+def sample_and_goal_jsons(merged_tuple):
+    data = merged_tuple[1]
 
-        if not mylist:
-            return
+    try:
+        stats = data["stats"][0]
+    except:
+        print('AAAARHG')
 
-        header = ['id', 'ts', 'delta', 'prediction', 'back', 'lay', 'start_back', 'start_lay', 'hgoal', 'agoal', 'runner_name', 'event_name',
-                  'event_id', 'market_name']
-        # header = ["exchangeId", "ts", "back", "lay", "backDiff", "layDiff", "home", "guest", "runnerName", "eventName", "eventId", "marketName"]
-        mylist.insert(0, header)
-        df = pd.DataFrame(mylist[1:], columns=mylist[0])
+    samples = data["samples"]
+    output = []
+    for sample in samples:
+        if not stats["home"] or not stats["away"]:
+            print("missing values for stats, event: " + sample["exchangeId"])
+            continue
 
-        file_exists = Path("data.csv").exists()
-        df.to_csv("data.csv", sep=';', index=False, header=not file_exists, mode='a' if file_exists else 'w')
+        output.append(aJson(stats, sample))
 
-        # logging.info("dump to csv")
+    return output
+
 
 
 class JsonReader(beam.PTransform):
@@ -54,7 +82,6 @@ class JsonReader(beam.PTransform):
                 # Bind window info to each element using element timestamp (or publish time).
                 | "Read json from storage" >> ParDo(JsonParser())
         )
-
 
 class JsonParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
@@ -119,8 +146,73 @@ class RecordToGCSBucket(beam.PTransform):
                 | "Flatten samples " >> beam.FlatMap(lambda x: x)
         )
 
+class MatchRow (DoFn):
+    def process(self, element):
+        event_id, competition_id, cutoff_date, delta, event_name, favourite, guest, home = element.split(";")
+        return [{
+            'event_id': event_id,
+            'competition_id': competition_id,
+            'cutoff_date': cutoff_date,
+            'event_name': event_name,
+            'guest': guest,
+            'home': home,
+            'favourite' : favourite,
+            'delta' : delta
+        }]
 
-def run(bootstrap_servers, args=None):
+class RunnerRow (DoFn):
+    def process(self, element):
+        id, market_id, runner_id, available, back, lay, market_name, matched, runner_name, total_available, total_matched = element.split(";")
+        return [{
+            'id': id,
+            'runner_id': runner_id,
+            'available': available,
+            'back': back,
+            'lay': lay,
+            'market_id': market_id,
+            'market_name': market_name,
+            'matched': matched,
+            'runner_name': runner_name,
+            'total_available': total_available,
+            'total_matched': total_matched
+        }]
+
+class EnrichWithStartQuotes (DoFn):
+    def process(self, tuple, runners):
+        sample = tuple[1]
+        runner_dict = {x['id'] + '_' + x['runner_id'] + '#' + x['market_name']: x for x in filter(lambda runner: runner['id'] == sample['eventId'], runners)}
+        key = sample['exchangeId']
+
+        if key in runner_dict.keys():
+            if runner_dict[key]:
+                runner = runner_dict[key]
+                sample['startLay'] = runner['lay']
+                sample['startBack'] = runner['back']
+        else:
+            logging.warn("Missing " + key + " in runner table ")
+            yield {}
+
+        yield sample
+
+class EnrichWithPrediction (DoFn):
+    def process (self, tuple, matches):
+
+        sample = tuple[1]
+        match_dict = {x['event_id']: x for x in filter(lambda match: match['event_id'] == sample['eventId'], matches)}
+        key = sample['eventId']
+
+        if key in match_dict.keys():
+            if match_dict[key]:
+                match = match_dict[key]
+                sample['prediction'] = match['favourite']
+                sample['delta'] = match['delta']
+        else:
+            logging.warn("Missing " + key + " in match table ")
+            yield {}
+
+        yield sample #toRecord(sample)
+
+def run(bootstrap_servers, match_csv, runner_csv, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
     pipeline_options = PipelineOptions(
@@ -142,160 +234,20 @@ def run(bootstrap_servers, args=None):
     #                 create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
     #      )
 
-    def toRecord(sample_json):
-        return [
-            sample_json["exchangeId"],
-            sample_json["ts"],
-            sample_json["delta"],
-            sample_json["prediction"],
-            sample_json["back"],
-            sample_json["lay"],
-            sample_json["startLay"],
-            sample_json["startBack"],
-            sample_json["hgoal"],
-            sample_json["agoal"],
-            sample_json["runnerName"],
-            sample_json["eventName"],
-            sample_json["eventId"],
-            sample_json["marketName"],
-        ]
+    with beam.Pipeline(options=pipeline_options) as pipeline:
 
-    class WriteDFToFile2(beam.DoFn):
+        match_dict = (
+                pipeline
+                | "Read matches " >> beam.io.ReadFromText("csv\\" + match_csv, skip_header_lines=1)
+                | "Parse match row " >> beam.ParDo(MatchRow())
 
-        def process(self, json):
-            header = ['id', 'ts', 'back', 'lay', 'back_diff', 'lay_diff', 'hgoal', 'agoal', 'runner_name', 'event_name',
-                      'event_id', 'market_name']
+        )
+        runner_dict = (
+                pipeline
+                | "Read runners " >> beam.io.ReadFromText("csv\\" + runner_csv, skip_header_lines=1)
+                | "Parse runner row " >> beam.ParDo(RunnerRow())
+        )
 
-            record = toRecord(json)
-            records = []
-            records.insert(0, header)
-            records.insert(1, record)
-            df = pd.DataFrame(records[1:], columns=records[0])
-
-            file_exists = Path("tmp.csv").exists()
-            df.to_csv("tmp.csv", sep=';', index=False, header=not file_exists, mode='a' if file_exists else 'w')
-
-            # logging.info("dump to csv")
-
-    def aJson(stats, sample):
-        return {
-            "exchangeId": sample["exchangeId"],
-            "ts": sample["ts"],
-            "delta": None,
-            "prediction": None,
-            "back": sample["back"],
-            "lay": sample["lay"],
-            "startLay": None,
-            "startBack": None,
-            "home": sample["home"],
-            "hgoal": stats["home"]["goals"],
-            "guest": sample["guest"],
-            "agoal": stats["away"]["goals"],
-            "runnerName": sample["runnerName"],
-            "eventName": sample["eventName"],
-            "eventId": sample["eventId"],
-            "marketName": sample["marketName"],
-        }
-
-    def sample_and_goal_jsons(merged_tuple):
-        data = merged_tuple[1]
-
-        try:
-            stats = data["stats"][0]
-        except:
-            print('AAAARHG')
-
-        samples = data["samples"]
-        output = []
-        for sample in samples:
-            if not stats["home"] or not stats["away"]:
-                print("missing values for stats, event: " + sample["exchangeId"])
-                continue
-
-            output.append(aJson(stats, sample))
-
-        return output
-
-    def tuple_to_jsons(merged_tuple):
-        data = merged_tuple[1]
-
-        prematch_sample = data["prematch"][0]
-        sample_and_goals = list(filter(
-            lambda sg: sg['runnerName'] == prematch_sample['runnerName']
-                       and sg['eventId'] == prematch_sample['eventId'], data["sample_and_goal"]))
-
-        output = []
-        for sample_and_goal in sample_and_goals:
-            pre_back = prematch_sample['back'] if prematch_sample['back'] >= 0 else None
-            lay = sample_and_goal['lay'] if sample_and_goal['lay'] >= 0 else None
-            # layDiff = round(lay - pre_back, 2) if lay is not None and pre_back is not None else None
-
-            pre_lay = prematch_sample['lay'] if prematch_sample['lay'] >= 0 else None
-            back = sample_and_goal['back'] if sample_and_goal['back'] >= 0 else None
-            # backDiff = round(back - pre_lay, 2) if back is not None and pre_lay is not None else None
-
-            sample_and_goal['lay'] = lay
-            sample_and_goal['back'] = back
-            sample_and_goal['startLay'] = pre_lay
-            sample_and_goal['startBack'] = pre_back
-
-            output.append(sample_and_goal)
-
-        return output
-
-
-    def records(merged_tuple):
-
-        data = merged_tuple[1]
-        pre_sample_and_goals = data["pre_samples_and_goal"]
-
-        player_1 = {}
-        player_2 = {}
-
-        if len(data["players"]) < 2:
-            logging.warn("Missing players for " + merged_tuple[0])
-            return []
-
-        if data["players"][0]['home'] == data["players"][0]['runnerName']:
-            player_1 = data["players"][0]
-
-        if data["players"][0]['guest'] == data["players"][0]['runnerName']:
-            player_2 = data["players"][0]
-
-        if data["players"][1]['home'] == data["players"][1]['runnerName']:
-            player_1 = data["players"][1]
-
-        if data["players"][1]['guest'] == data["players"][1]['runnerName']:
-            player_2 = data["players"][1]
-
-        delta = abs(player_1['lay'] - player_2['lay'])
-        prediction = 'HOME' if player_1['lay'] < player_2['lay'] else 'AWAY'
-
-        output = []
-        for pre_sample_and_goal in pre_sample_and_goals:
-            pre_sample_and_goal['prediction'] = prediction
-            pre_sample_and_goal['delta'] = delta
-            if pre_sample_and_goal['marketName'] == 'MATCH_ODDS':
-                if pre_sample_and_goal['runnerName'] != 'Pareggio':
-                    pre_sample_and_goal['runnerName'] = 'HOME' if pre_sample_and_goal['runnerName'] == pre_sample_and_goal['home'] else 'AWAY'
-
-            output.append(toRecord(pre_sample_and_goal))
-
-        return output
-
-    def debug_filter(prematch_tuple):
-        json = prematch_tuple[1]
-        if json['eventId'] == '31134143' and json['marketName'] == 'MATCH_ODDS':
-            print("************ Found " + str(prematch_tuple[0]))
-            return True
-
-        return False
-
-    def home_or_guest_filter(prematch_tuple):
-        json = prematch_tuple[1]
-        return json['marketName'] == 'MATCH_ODDS' and json['runnerName'] != 'Pareggio'
-
-    with beam.Pipeline() as pipeline:
         samples_tuple = (
                 pipeline
                 | "Matching samples" >> fileio.MatchFiles(
@@ -318,63 +270,48 @@ def run(bootstrap_servers, args=None):
                 | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
 
-        prematch_tuples = (
-                pipeline
-                | "Getting prematch files" >> fileio.MatchFiles(
-            'C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\prematch\\*.json')
-                | "Reading prematch files" >> fileio.ReadMatches()
-                | "Converting prematch files to json" >> JsonReader()
-                | "Flatten prematch " >> beam.FlatMap(lambda x: x)
-                | "map prematch " >> beam.Map(lambda x: x)
-                | "add key using runner name " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
-        )
-
-        # d = (
-        #         prematch_tuples
-        #         | "debug" >> beam.Filter(lambda prematch_tuple: debug_filter(prematch_tuple))
-        #         | "get player" >> beam.Map(lambda prematch_tuple: prematch_tuple[1])
-        #         | 'To string' >> beam.ToString.Kvs()
-        #         | beam.Map(print)
-        # )
-
-        player_tuples = (
-                prematch_tuples
-                | "Filter match odds values" >> beam.Filter(lambda prematch_tuple: home_or_guest_filter(prematch_tuple))
-                | "get player jsons from tuples" >> beam.Map(lambda prematch_tuple: prematch_tuple[1])
-                | "Player tuples " >> WithKeys(lambda player_json: player_json['eventId'])
-        )
-
-        # sample_with_goal_tuples = (
-        #         ({'samples': samples_tuple, 'stats': stats_tuple})
-        #         | 'Merge back record' >> beam.CoGroupByKey()
-        #         | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
-        #         # | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
-        #         | 'Write to csv' >> beam.ParDo(WriteDFToFile2())
-        #     # | beam.Map(lambda sample: beam.Row(id=sample["id"], ts=sample["ts"], quote=sample["quote"], home=sample["home"], away=sample["away"], runner_name=sample["runnerName"], event_name=sample["eventName"], market_name=sample["marketName"]))
-        # )
-
-        sample_with_goal_tuples = (
+        sample_with_score_tuples = (
                 ({'samples': samples_tuple, 'stats': stats_tuple})
                 | 'Merge back record' >> beam.CoGroupByKey()
                 | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
                 | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
-                | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerName'])
+                | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerId'])
         )
 
         pre_samples_goal_tuples = (
-                ({'prematch': prematch_tuples, 'sample_and_goal': sample_with_goal_tuples})
-                | 'Merge by eventId and runnerName' >> beam.CoGroupByKey()
-                | 'Remove empty prematch key' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['prematch']) > 0 and len(merged_tuple[1]['sample_and_goal']) > 0)
-                | 'convert join tuple to json ' >> beam.FlatMap(lambda merged_tuple: tuple_to_jsons(merged_tuple))
+                sample_with_score_tuples
+                | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
+                | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
                 | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['eventId'])
         )
 
-        (
-                ({'players': player_tuples, 'pre_samples_and_goal': pre_samples_goal_tuples})
-                | 'Merge by eventId' >> beam.CoGroupByKey()
-                | 'Convert join to records' >> beam.Map(lambda x: records(x))
-                | 'Write to csv' >> beam.ParDo(WriteDFToFile())
-        )
+        df = to_dataframe(pre_samples_goal_tuples
+                | 'Enrich sample with home and guest ' >> beam.ParDo(EnrichWithPrediction(), beam.pvalue.AsList(match_dict))
+                | 'Remove empty sample for missing match ' >> beam.Filter(lambda sample: bool(sample))
+                | 'Define schema' >> beam.Select(
+                    id=lambda x: str(x['exchangeId']),
+                    runner_id=lambda x: str(x['runnerId']),
+                    ts=lambda x: str(x['ts']),
+                    delta=lambda x: str(x['delta']),
+                    prediction=lambda x: str(x['prediction']),
+                    back=lambda x: float(x['back']),
+                    lay=lambda x: float(x['lay']),
+                    start_lay=lambda x: float(x['startLay']),
+                    start_back=lambda x: float(x['startBack']),
+                    hgoal=lambda x: str(x['hgoal']),
+                    agoal=lambda x: str(x['agoal']),
+                    runner_name=lambda x: str(x['runnerName']),
+                    event_name=lambda x: str(x['eventName']),
+                    event_id=lambda x: str(x['eventId']),
+                    market_name=lambda x: str(x['marketName']),
+                    available=lambda x: float(x['available']),
+                    matched=lambda x: float(x['matched']),
+                    total_available=lambda x: float(x['totalAvailable']),
+                    total_matched=lambda x: float(x['totalMatched']))
+            )
+
+        file_exists = Path("data.csv").exists()
+        df.to_csv("data.csv", sep=';', index=False, header=not file_exists, mode='a' if file_exists else 'w', encoding="utf-8", line_terminator='\n')
 
     logging.info("pipeline started")
 
@@ -386,8 +323,46 @@ if __name__ == '__main__':
         '--bootstrap_servers',
         dest='bootstrap_servers',
         required=True,
-        help='Bootstrap servers for the Kafka cluster. Should be accessible by the runner')
+        help='Bootstrap servers for the Kafka cluster. Should be accessible by the runner'
+    )
+    parser.add_argument(
+        '--match_csv',
+        dest='match_csv',
+        required=True,
+        help='csv with the match to consider'
+    )
+    parser.add_argument(
+        '--runner_csv',
+        dest='runner_csv',
+        required=True,
+        help='csv with the runner to consider'
+    )
+
     known_args, pipeline_args = parser.parse_known_args()
-    run(known_args.bootstrap_servers, pipeline_args)
+    run(known_args.bootstrap_servers, known_args.match_csv, known_args.runner_csv, pipeline_args)
 
     # print(dateutil.parser.isoparse('2021-11-03T17:22:59.5850463'))
+
+
+# https://stackoverflow.com/questions/70520233/concatenating-multiple-csv-files-in-apache-beam/70534957
+# class convert_to_dataFrame(beam.DoFn):
+#     def process(self, element):
+#         return pd.DataFrame(element)
+#
+# class merge_dataframes(beam.DoFn):
+#     def process(self, element):
+#         logging.info(element)
+#         logging.info(type(element))
+#         return pd.concat(element).reset_index(drop=True)
+#
+# p = beam.Pipeline()
+# concating = (p
+#              | beam.io.fileio.MatchFiles("C:/Users/firuz/Documents/task/mobilab_da_task/concats/**")
+#              | beam.io.fileio.ReadMatches()
+#              | beam.Reshuffle()
+#              | beam.ParDo(convert_to_dataFrame())
+#              | beam.combiners.ToList()
+#              | beam.ParDo(merge_dataframes())
+#              | beam.io.WriteToText('C:/Users/firuz/Documents/task/mobilab_da_task/output_tests/merged', file_name_suffix='.csv'))
+#
+# p.run()

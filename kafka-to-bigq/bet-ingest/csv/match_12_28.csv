@@ -1,0 +1,8 @@
+event_id;competition_id;cutoff_date;delta;event_name;favourite;guest;home
+31139230;10932509;2021-12-28 20:00:00;7.81;Leicester - Liverpool;AWAY;Liverpool;Leicester
+31130435;99;2021-12-28 19:00:00;0.63;Maritimo - Vizela;AWAY;Vizela;Maritimo
+31130438;99;2021-12-28 21:00:00;0.02;Moreirense - Estoril;HOME;Estoril;Moreirense
+31130443;99;2021-12-28 17:00:00;1.28;Tondela - Gil Vicente;AWAY;Gil Vicente;Tondela
+31139211;10932509;2021-12-28 15:00:00;3.51;Crystal Palace - Norwich;HOME;Norwich;Crystal Palace
+31139215;10932509;2021-12-28 15:00:00;1.15;Watford - West Ham;AWAY;West Ham;Watford
+31139231;10932509;2021-12-28 15:00:00;2;Southampton - Tottenham;AWAY;Tottenham;Southampton

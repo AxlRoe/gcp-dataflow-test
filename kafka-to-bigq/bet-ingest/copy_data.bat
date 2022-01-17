@@ -30,7 +30,7 @@ rem psql -U postgres postgres
 psql -c "\copy match FROM 'C:\Users\mmarini\MyGit\bet-scheduler\data_"%1"\match.csv' delimiter ';' csv HEADER" -U postgres postgres
 psql -c "\copy task_execution FROM 'C:\Users\mmarini\MyGit\bet-scheduler\data_"%1"\task_execution.csv' delimiter ';' csv HEADER" -U postgres postgres
 
-rem curl --location --request POST "http://localhost:9000/scraper/recover" --data-raw "{""to"" : ""2021-12-26T23:00:00"", ""since"" : ""2021-12-26T00:00:00""}" -H "Content-Type: application/json"
+rem rem curl --location --request POST "http://localhost:9000/scraper/recover" --data-raw "{""to"" : ""2021-12-27T23:00:00"", ""since"" : ""2021-12-27T00:00:00""}" -H "Content-Type: application/json"
 curl --location --request POST "http://localhost:9000/scraper/recover" --data-raw "{""to"" : ""%2"", ""since"" : ""%3""}" -H "Content-Type: application/json"
 
 copy recover\live_* C:\Users\mmarini\MyGit\gcp-dataflow-test\kafka-to-bigq\bet-ingest\samples
@@ -42,7 +42,9 @@ ren dump dump_%1
 
 cd C:\Users\mmarini\MyGit\gcp-dataflow-test\kafka-to-bigq\bet-ingest
 
-python pipeline.py --bootstrap_servers localhost:9092
+psql -c "\copy (select * from match where cutoff_date < TO_DATE('"%4"','YYYYMMDD')) To 'csv\match_"%1".csv' delimiter ';' csv HEADER ENCODING 'UTF8'" -U postgres postgres
+psql -c "\copy (select * from runner) To 'csv\runner_"%1".csv' delimiter ';' csv HEADER ENCODING 'UTF8'" -U postgres postgres
 
+python pipeline.py --bootstrap_servers localhost:9092 --match_csv match_%1.csv --runner_csv runner_%1.csv
+ren data.csv* data.csv
 copy data.csv C:\Users\mmarini\MyGit\py-bet-analyzer\ml\csv\bet_%1.csv
-

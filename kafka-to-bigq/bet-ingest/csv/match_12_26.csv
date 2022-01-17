@@ -1,0 +1,18 @@
+event_id;competition_id;cutoff_date;delta;event_name;favourite;guest;home
+31134145;10932509;2021-12-26 15:00:00;6.7;Norwich - Arsenal;AWAY;Arsenal;Norwich
+31134148;10932509;2021-12-26 15:00:00;4.19;Tottenham - Crystal Palace;HOME;Crystal Palace;Tottenham
+31134156;10932509;2021-12-26 15:00:00;18.81;Manchester City - Leicester;HOME;Leicester;Manchester City
+31134159;10932509;2021-12-26 15:00:00;2.44;West Ham - Southampton;HOME;Southampton;West Ham
+31130536;12199689;2021-12-26 14:00:00;;US Cremonese - Como;AWAY;Como;US Cremonese
+31130561;12199689;2021-12-26 14:00:00;;Cittadella - Cosenza;AWAY;Cosenza;Cittadella
+31130562;12199689;2021-12-26 14:00:00;;AC Monza - Perugia;AWAY;Perugia;AC Monza
+31130564;12199689;2021-12-26 14:00:00;2.88;Pordenone - Lecce;AWAY;Lecce;Pordenone
+31130568;12199689;2021-12-26 14:00:00;;Reggina - Brescia;AWAY;Brescia;Reggina
+31130574;12199689;2021-12-26 14:00:00;;Spal - Benevento;AWAY;Benevento;Spal
+31130576;12199689;2021-12-26 14:00:00;;LR Vicenza Virtus - Alessandria;AWAY;Alessandria;LR Vicenza Virtus
+31134143;10932509;2021-12-26 12:30:00;;Wolverhampton - Watford;AWAY;Watford;Wolverhampton
+31134144;10932509;2021-12-26 12:30:00;;Liverpool - Leeds;AWAY;Leeds;Liverpool
+31130581;12199689;2021-12-26 19:30:00;0.4;Pisa - Frosinone;HOME;Frosinone;Pisa
+31134152;10932509;2021-12-26 20:00:00;2.44;Brighton - Brentford;HOME;Brentford;Brighton
+31134151;10932509;2021-12-26 17:30:00;3.82;Aston Villa - Chelsea;AWAY;Chelsea;Aston Villa
+31130582;12199689;2021-12-26 17:00:00;2.78;Ternana - Ascoli;HOME;Ascoli;Ternana
