@@ -2,16 +2,28 @@
 
 from __future__ import absolute_import
 
+import pandas as pd
 import argparse
 import ast
 import json
 import logging
 import random
 from pathlib import Path
+import os
+import re
+from datetime import datetime, time, timedelta
+from collections import Counter
+
+import dateutil
+import numpy as np
+import pandas as pd
+from matplotlib.dates import DateFormatter
+
 
 import apache_beam as beam
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.dataframe.convert import to_dataframe
+from apache_beam.dataframe.transforms import DataframeTransform
 from apache_beam.io import fileio
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.transforms import window
@@ -29,26 +41,26 @@ SCHEMA = ",".join(
 
 def aJson(stats, sample):
     return {
-        "exchangeId": sample["exchangeId"],
-        "runnerId": str(sample["runnerId"]),
+        "id": sample["exchangeId"],
+        "runner_id": str(sample["runnerId"]),
         "ts": sample["ts"],
         "delta": float("NaN"),
         "prediction": None,
         "back": round(sample["back"] * 100) / 100,
         "lay": round(sample["lay"] * 100) / 100,
-        "startLay": float("NaN"),
-        "startBack": float("NaN"),
+        "start_lay": float("NaN"),
+        "start_back": float("NaN"),
         "home": sample["home"],
         "hgoal": stats["home"]["goals"],
         "guest": sample["guest"],
         "agoal": stats["away"]["goals"],
-        "runnerName": sample["runnerName"],
-        "eventName": sample["eventName"],
-        "eventId": sample["eventId"],
-        "marketName": sample["marketName"],
-        "marketId": sample["marketId"],
-        "totalAvailable": round(sample["totalAvailable"] * 100) / 100,
-        "totalMatched": round(sample["totalMatched"] * 100) / 100,
+        "runner_name": sample["runnerName"],
+        "event_name": sample["eventName"],
+        "event_id": sample["eventId"],
+        "market_name": sample["marketName"],
+        "market_id": sample["marketId"],
+        "total_available": round(sample["totalAvailable"] * 100) / 100,
+        "total_matched": round(sample["totalMatched"] * 100) / 100,
         "matched": round(sample["matched"] * 100) / 100,
         "available": round(sample["available"] * 100) / 100,
     }
@@ -66,14 +78,124 @@ def sample_and_goal_jsons(merged_tuple):
     output = []
     for sample in samples:
         if not stats["home"] or not stats["away"]:
-            print("missing values for stats, event: " + sample["exchangeId"])
+            print("missing values for stats, event: " + sample["id"])
             continue
 
         output.append(aJson(stats, sample))
 
     return output
 
+def hms_to_min(s):
+    t = 0
+    for u in s.strftime("%H:%M").split(':'):
+        t = 60 * t + int(u)
+    return t
 
+def create_df_by_event(rows):
+    rows.insert(0, ['id', 'runner_id', 'ts', 'delta', 'prediction', 'back', 'lay', 'start_lay', 'start_back', 'hgoal',
+                    'agoal', 'runner_name', 'event_name', 'event_id', 'market_name', 'available', 'matched',
+                    'total_available', 'total_matched', ])
+    return pd.DataFrame(rows[1:], columns=rows[0])
+
+def current_result_is (prediction, agoal, hgoal):
+    if 'HOME' == prediction:
+        if hgoal > agoal:
+            return 'EXPECTED'
+        elif hgoal == agoal:
+            return 'DRAW'
+        else:
+            return 'WRONG'
+    elif 'AWAY' == prediction:
+        if hgoal < agoal:
+            return 'EXPECTED'
+        elif hgoal == agoal:
+            return 'DRAW'
+        else:
+            return 'WRONG'
+
+def drop_rule_out_goals(df):
+    # use 121 because step is made by 120s see https://stackoverflow.com/questions/46105315/python-pandas-finding-derivatives-from-dataframe
+    diff = df.set_index('ts').agoal.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
+    diff = diff.reset_index(drop=True)
+
+    negative_diff_indexes = diff[diff < 0]
+    for index, value in negative_diff_indexes.items():
+        real_agoals = list(df.iloc[[index]]['agoal'])[0]
+        df.iloc[index - 1, df.columns.get_loc('agoal')] = real_agoals
+
+    diff = df.set_index('ts').hgoal.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
+    diff = diff.reset_index(drop=True)
+
+    negative_diff_indexes = diff[diff < 0]
+    for index, value in negative_diff_indexes.items():
+        real_hgoals = list(df.iloc[[index]]['hgoal'])[0]
+        df.iloc[index - 1, df.columns.get_loc('hgoal')] = real_hgoals
+
+    return df
+
+def interpolate_missing_ts (df):
+    prediction = df.prediction.unique()[0]
+    runner = df.runner_name.unique()[0]
+    event_id = df.event_id.unique()[0]
+
+    df['ts'] = df.apply(lambda x: dateutil.parser.isoparse(x.ts), axis=1)
+
+    start = datetime.combine(df['ts'].min(), time.min)
+    end = start + timedelta(minutes=120)
+
+    idx = pd.date_range(start, end, freq='120S')
+    df.set_index('ts', drop=True, inplace=True)
+    df.index = pd.DatetimeIndex(df.index)
+    df = df.reindex(idx, fill_value=None)
+    df['ts'] = pd.DatetimeIndex(df.index)
+
+    df['lay'] = df.apply(lambda row: float('nan') if row.lay < 0 else row.lay, axis=1)
+
+    df_interpol = df.resample('120S').mean()
+    df_interpol['lay'] = df_interpol['lay'].interpolate()
+    df_interpol['back'] = df_interpol['back'].interpolate()
+    df_interpol['delta'] = df_interpol['delta'].pad()
+    df_interpol['agoal'] = df_interpol['agoal'].pad()
+    df_interpol['hgoal'] = df_interpol['hgoal'].pad()
+    df_interpol['start_back'] = df_interpol['start_back'].pad()
+    df_interpol['start_lay'] = df_interpol['start_lay'].pad()
+
+    #df_interpol = df_interpol.assign(event_id=lambda x: event)
+    # once index is set, this assign statement create a column with the same length of the index and each row has the same value
+    df_interpol = df_interpol.assign(prediction=lambda x: prediction)
+    df_interpol = df_interpol.assign(event_id=lambda x: event_id)
+    df_interpol = df_interpol.assign(runner_name=lambda x: runner)
+    df_interpol = df_interpol.assign(lay=lambda row: round(row.lay, 2))
+
+    # dlay = df_interpol.lay.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
+    # df_interpol['dlay'] = dlay
+    df_interpol['ts'] = df['ts']
+    df_interpol['minute'] = df_interpol.apply(lambda row: hms_to_min(row.ts), axis=1)
+
+    return df_interpol
+
+def is_draw_match (df):
+    results = np.array(df['current_result'])
+    dict = Counter(results)
+    draw = 0 if dict['DRAW'] is None else dict['DRAW']
+    expected = 0 if dict['EXPECTED'] is None else dict['EXPECTED']
+    wrong = 0 if dict['WRONG'] is None else dict['WRONG']
+    other = expected + wrong
+    p = (draw / results.size) * 100
+    if p >= 85:
+        print('skip event because it is draw at ' + str(p) + "%, draw: " + str(draw) + " other: " + str(other))
+        return True
+
+    return df['current_result'].iloc[-1] == 'DRAW'
+
+def assign_goal_diff_by_prediction (df):
+    df['goal_diff_by_prediction'] = df.apply(lambda row: row.hgoal - row.agoal if row.prediction == 'HOME' else row.agoal - row.hgoal, axis=1)
+    return df
+
+
+def assign_current_result(df):
+    df['current_result'] = df.apply(lambda row: current_result_is(row.prediction, row.hgoal, row.agoal), axis=1)
+    return df
 
 class JsonReader(beam.PTransform):
     def expand(self, pcoll):
@@ -157,7 +279,7 @@ class MatchRow (DoFn):
             'guest': guest,
             'home': home,
             'favourite' : favourite,
-            'delta' : delta
+            'delta' : float(delta)
         }]
 
 class RunnerRow (DoFn):
@@ -167,27 +289,27 @@ class RunnerRow (DoFn):
             'id': id,
             'runner_id': runner_id,
             'available': available,
-            'back': back,
-            'lay': lay,
+            'back': float(back),
+            'lay': float(lay),
             'market_id': market_id,
             'market_name': market_name,
             'matched': matched,
             'runner_name': runner_name,
-            'total_available': total_available,
-            'total_matched': total_matched
+            'total_available': round(float(total_available) * 100) / 100,
+            'total_matched': round(float(total_matched) * 100) / 100
         }]
 
 class EnrichWithStartQuotes (DoFn):
     def process(self, tuple, runners):
         sample = tuple[1]
-        runner_dict = {x['id'] + '_' + x['runner_id'] + '#' + x['market_name']: x for x in filter(lambda runner: runner['id'] == sample['eventId'], runners)}
-        key = sample['exchangeId']
+        runner_dict = {x['id'] + '_' + x['runner_id'] + '#' + x['market_name']: x for x in filter(lambda runner: runner['id'] == sample['event_id'], runners)}
+        key = sample['id']
 
         if key in runner_dict.keys():
             if runner_dict[key]:
                 runner = runner_dict[key]
-                sample['startLay'] = runner['lay']
-                sample['startBack'] = runner['back']
+                sample['start_lay'] = runner['lay']
+                sample['start_back'] = runner['back']
         else:
             logging.warn("Missing " + key + " in runner table ")
             yield {}
@@ -198,8 +320,8 @@ class EnrichWithPrediction (DoFn):
     def process (self, tuple, matches):
 
         sample = tuple[1]
-        match_dict = {x['event_id']: x for x in filter(lambda match: match['event_id'] == sample['eventId'], matches)}
-        key = sample['eventId']
+        match_dict = {x['event_id']: x for x in filter(lambda match: match['event_id'] == sample['event_id'], matches)}
+        key = sample['event_id']
 
         if key in match_dict.keys():
             if match_dict[key]:
@@ -210,7 +332,8 @@ class EnrichWithPrediction (DoFn):
             logging.warn("Missing " + key + " in match table ")
             yield {}
 
-        yield sample #toRecord(sample)
+        yield sample
+
 
 def run(bootstrap_servers, match_csv, runner_csv, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
@@ -275,43 +398,33 @@ def run(bootstrap_servers, match_csv, runner_csv, args=None):
                 | 'Merge back record' >> beam.CoGroupByKey()
                 | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
                 | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
-                | "add key " >> WithKeys(lambda x: x['eventId'] + '#' + x['runnerId'])
+                | "add key " >> WithKeys(lambda x: x['event_id'] + '#' + x['runner_id'])
         )
 
-        pre_samples_goal_tuples = (
+        samples_enriched_with_start_quotes = (
                 sample_with_score_tuples
                 | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
                 | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
-                | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['eventId'])
+                | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
         )
 
-        df = to_dataframe(pre_samples_goal_tuples
+        _ = (samples_enriched_with_start_quotes
                 | 'Enrich sample with home and guest ' >> beam.ParDo(EnrichWithPrediction(), beam.pvalue.AsList(match_dict))
                 | 'Remove empty sample for missing match ' >> beam.Filter(lambda sample: bool(sample))
-                | 'Define schema' >> beam.Select(
-                    id=lambda x: str(x['exchangeId']),
-                    runner_id=lambda x: str(x['runnerId']),
-                    ts=lambda x: str(x['ts']),
-                    delta=lambda x: str(x['delta']),
-                    prediction=lambda x: str(x['prediction']),
-                    back=lambda x: float(x['back']),
-                    lay=lambda x: float(x['lay']),
-                    start_lay=lambda x: float(x['startLay']),
-                    start_back=lambda x: float(x['startBack']),
-                    hgoal=lambda x: str(x['hgoal']),
-                    agoal=lambda x: str(x['agoal']),
-                    runner_name=lambda x: str(x['runnerName']),
-                    event_name=lambda x: str(x['eventName']),
-                    event_id=lambda x: str(x['eventId']),
-                    market_name=lambda x: str(x['marketName']),
-                    available=lambda x: float(x['available']),
-                    matched=lambda x: float(x['matched']),
-                    total_available=lambda x: float(x['totalAvailable']),
-                    total_matched=lambda x: float(x['totalMatched']))
+                | 'add event_id as key' >> WithKeys(lambda row : row['event_id'])
+                | 'group by key' >> GroupByKey()
+                | 'get list of rows ' >> beam.Map(lambda tuple : tuple[1])
+                | 'create dataframe for an event ' >> beam.Map(lambda rows: create_df_by_event(rows))
+                | 'remove duplicated ts' >> beam.Map(lambda df: df.drop_duplicates(subset='ts', keep='first'))
+                | 'interpolate quote values for missing ts ' >> beam.Map(lambda df: interpolate_missing_ts(df))
+                | 'drop rule out goals ' >> beam.Map(lambda df: drop_rule_out_goals(df))
+                | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
+                | 'add current_result column' >> beam.Map(lambda df: assign_current_result(df))
+                | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
+                #| 'drop draw matches ' >> beam.Filter(lambda df: is_draw_match(df))
+                | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: pd.concat(dfs).reset_index(drop=True))
+                | 'write to csv ' >> beam.Map(lambda df: df.to_csv("data.csv", index=False, encoding="utf-8", line_terminator='\n'))
             )
-
-        file_exists = Path("data.csv").exists()
-        df.to_csv("data.csv", sep=';', index=False, header=not file_exists, mode='a' if file_exists else 'w', encoding="utf-8", line_terminator='\n')
 
     logging.info("pipeline started")
 
@@ -340,29 +453,3 @@ if __name__ == '__main__':
 
     known_args, pipeline_args = parser.parse_known_args()
     run(known_args.bootstrap_servers, known_args.match_csv, known_args.runner_csv, pipeline_args)
-
-    # print(dateutil.parser.isoparse('2021-11-03T17:22:59.5850463'))
-
-
-# https://stackoverflow.com/questions/70520233/concatenating-multiple-csv-files-in-apache-beam/70534957
-# class convert_to_dataFrame(beam.DoFn):
-#     def process(self, element):
-#         return pd.DataFrame(element)
-#
-# class merge_dataframes(beam.DoFn):
-#     def process(self, element):
-#         logging.info(element)
-#         logging.info(type(element))
-#         return pd.concat(element).reset_index(drop=True)
-#
-# p = beam.Pipeline()
-# concating = (p
-#              | beam.io.fileio.MatchFiles("C:/Users/firuz/Documents/task/mobilab_da_task/concats/**")
-#              | beam.io.fileio.ReadMatches()
-#              | beam.Reshuffle()
-#              | beam.ParDo(convert_to_dataFrame())
-#              | beam.combiners.ToList()
-#              | beam.ParDo(merge_dataframes())
-#              | beam.io.WriteToText('C:/Users/firuz/Documents/task/mobilab_da_task/output_tests/merged', file_name_suffix='.csv'))
-#
-# p.run()
