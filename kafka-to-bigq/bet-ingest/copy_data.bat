@@ -1,5 +1,4 @@
 @echo off
-del /f data.csv
 rmdir /S /q prematch stats samples
 mkdir stats samples prematch
 
@@ -45,6 +44,6 @@ cd C:\Users\mmarini\MyGit\gcp-dataflow-test\kafka-to-bigq\bet-ingest
 psql -c "\copy (select * from match where cutoff_date < TO_DATE('"%4"','YYYYMMDD')) To 'csv\match_"%1".csv' delimiter ';' csv HEADER ENCODING 'UTF8'" -U postgres postgres
 psql -c "\copy (select * from runner) To 'csv\runner_"%1".csv' delimiter ';' csv HEADER ENCODING 'UTF8'" -U postgres postgres
 
-python pipeline.py --bootstrap_servers localhost:9092 --match_csv match_%1.csv --runner_csv runner_%1.csv
-ren data.csv* data.csv
-copy data.csv C:\Users\mmarini\MyGit\py-bet-analyzer\ml\csv\bet_%1.csv
+python pipeline.py --bootstrap_servers localhost:9092 --match_csv match_%1.csv --runner_csv runner_%1.csv --out_csv data.csv
+ren data.csv* data_%1.csv
+rem copy data.csv C:\Users\mmarini\MyGit\py-bet-analyzer\ml\csv\bet_%1.csv

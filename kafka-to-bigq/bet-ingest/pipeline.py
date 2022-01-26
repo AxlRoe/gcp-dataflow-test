@@ -2,28 +2,19 @@
 
 from __future__ import absolute_import
 
-import pandas as pd
 import argparse
 import ast
 import json
 import logging
 import random
-from pathlib import Path
-import os
-import re
-from datetime import datetime, time, timedelta
 from collections import Counter
+from datetime import datetime, time, timedelta
 
+import apache_beam as beam
 import dateutil
 import numpy as np
 import pandas as pd
-from matplotlib.dates import DateFormatter
-
-
-import apache_beam as beam
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
-from apache_beam.dataframe.convert import to_dataframe
-from apache_beam.dataframe.transforms import DataframeTransform
 from apache_beam.io import fileio
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.transforms import window
@@ -44,7 +35,7 @@ def aJson(stats, sample):
         "id": sample["exchangeId"],
         "runner_id": str(sample["runnerId"]),
         "ts": sample["ts"],
-        "delta": float("NaN"),
+        #"delta": float("NaN"),
         "prediction": None,
         "back": round(sample["back"] * 100) / 100,
         "lay": round(sample["lay"] * 100) / 100,
@@ -78,7 +69,7 @@ def sample_and_goal_jsons(merged_tuple):
     output = []
     for sample in samples:
         if not stats["home"] or not stats["away"]:
-            print("missing values for stats, event: " + sample["id"])
+            print("missing values for stats, event: " + sample["eventId"])
             continue
 
         output.append(aJson(stats, sample))
@@ -92,7 +83,7 @@ def hms_to_min(s):
     return t
 
 def create_df_by_event(rows):
-    rows.insert(0, ['id', 'runner_id', 'ts', 'delta', 'prediction', 'back', 'lay', 'start_lay', 'start_back', 'hgoal',
+    rows.insert(0, ['id', 'runner_id', 'ts', 'prediction', 'back', 'lay', 'start_lay', 'start_back', 'hgoal',
                     'agoal', 'runner_name', 'event_name', 'event_id', 'market_name', 'available', 'matched',
                     'total_available', 'total_matched', ])
     return pd.DataFrame(rows[1:], columns=rows[0])
@@ -135,6 +126,7 @@ def drop_rule_out_goals(df):
 
 def interpolate_missing_ts (df):
     prediction = df.prediction.unique()[0]
+    prediction = df.prediction.unique()[0]
     runner = df.runner_name.unique()[0]
     event_id = df.event_id.unique()[0]
 
@@ -149,16 +141,19 @@ def interpolate_missing_ts (df):
     df = df.reindex(idx, fill_value=None)
     df['ts'] = pd.DatetimeIndex(df.index)
 
-    df['lay'] = df.apply(lambda row: float('nan') if row.lay < 0 else row.lay, axis=1)
+    df['lay'] = df.apply(lambda row: float('NaN') if row.lay < 0 else row.lay, axis=1)
 
     df_interpol = df.resample('120S').mean()
     df_interpol['lay'] = df_interpol['lay'].interpolate()
     df_interpol['back'] = df_interpol['back'].interpolate()
-    df_interpol['delta'] = df_interpol['delta'].pad()
+    #df_interpol['delta'] = df_interpol['delta'].pad()
     df_interpol['agoal'] = df_interpol['agoal'].pad()
-    df_interpol['hgoal'] = df_interpol['hgoal'].pad()
     df_interpol['start_back'] = df_interpol['start_back'].pad()
     df_interpol['start_lay'] = df_interpol['start_lay'].pad()
+    df_interpol['available'] = df_interpol['available'].pad()
+    df_interpol['matched'] = df_interpol['matched'].pad()
+    df_interpol['total_matched'] = df_interpol['total_matched'].pad()
+    df_interpol['total_available'] = df_interpol['total_available'].pad()
 
     #df_interpol = df_interpol.assign(event_id=lambda x: event)
     # once index is set, this assign statement create a column with the same length of the index and each row has the same value
@@ -183,7 +178,7 @@ def is_draw_match (df):
     other = expected + wrong
     p = (draw / results.size) * 100
     if p >= 85:
-        print('skip event because it is draw at ' + str(p) + "%, draw: " + str(draw) + " other: " + str(other))
+        logging.info('skip event because it is draw at ' + str(p) + "%, draw: " + str(draw) + " other: " + str(other))
         return True
 
     return df['current_result'].iloc[-1] == 'DRAW'
@@ -271,6 +266,9 @@ class RecordToGCSBucket(beam.PTransform):
 class MatchRow (DoFn):
     def process(self, element):
         event_id, competition_id, cutoff_date, delta, event_name, favourite, guest, home = element.split(";")
+        if favourite == '':
+            return []
+
         return [{
             'event_id': event_id,
             'competition_id': competition_id,
@@ -278,8 +276,7 @@ class MatchRow (DoFn):
             'event_name': event_name,
             'guest': guest,
             'home': home,
-            'favourite' : favourite,
-            'delta' : float(delta)
+            'favourite': favourite
         }]
 
 class RunnerRow (DoFn):
@@ -327,15 +324,20 @@ class EnrichWithPrediction (DoFn):
             if match_dict[key]:
                 match = match_dict[key]
                 sample['prediction'] = match['favourite']
-                sample['delta'] = match['delta']
         else:
             logging.warn("Missing " + key + " in match table ")
             yield {}
 
         yield sample
 
+def merge_df(dfs):
+    if not dfs:
+        logging.info("No dataframe to concat ")
+        return pd.DataFrame([])
 
-def run(bootstrap_servers, match_csv, runner_csv, args=None):
+    return pd.concat(dfs).reset_index(drop=True)
+
+def run(bootstrap_servers, match_csv, runner_csv, out_csv, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
     pipeline_options = PipelineOptions(
@@ -363,6 +365,7 @@ def run(bootstrap_servers, match_csv, runner_csv, args=None):
                 pipeline
                 | "Read matches " >> beam.io.ReadFromText("csv\\" + match_csv, skip_header_lines=1)
                 | "Parse match row " >> beam.ParDo(MatchRow())
+                | "Filter matches without favourite" >> beam.Filter(lambda row: len(row) > 0)
 
         )
         runner_dict = (
@@ -421,9 +424,10 @@ def run(bootstrap_servers, match_csv, runner_csv, args=None):
                 | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
                 | 'add current_result column' >> beam.Map(lambda df: assign_current_result(df))
                 | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
-                #| 'drop draw matches ' >> beam.Filter(lambda df: is_draw_match(df))
-                | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: pd.concat(dfs).reset_index(drop=True))
-                | 'write to csv ' >> beam.Map(lambda df: df.to_csv("data.csv", index=False, encoding="utf-8", line_terminator='\n'))
+                | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
+                | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
+                | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
+                | 'write to csv ' >> beam.Map(lambda df: df.to_csv(out_csv, sep=';', index=False, encoding="utf-8", line_terminator='\n'))
             )
 
     logging.info("pipeline started")
@@ -451,5 +455,12 @@ if __name__ == '__main__':
         help='csv with the runner to consider'
     )
 
+    parser.add_argument(
+        '--out_csv',
+        dest='out_csv',
+        required=True,
+        help='csv with the output of the pipeline'
+    )
+
     known_args, pipeline_args = parser.parse_known_args()
-    run(known_args.bootstrap_servers, known_args.match_csv, known_args.runner_csv, pipeline_args)
+    run(known_args.bootstrap_servers, known_args.match_csv, known_args.runner_csv, known_args.out_csv, pipeline_args)

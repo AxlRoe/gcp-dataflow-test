@@ -1,9 +1,0 @@
-event_id;competition_id;cutoff_date;delta;event_name;favourite;guest;home
-31139673;81;2022-01-06 11:30:00;9;Bologna - Inter;AWAY;Inter;Bologna
-31139787;81;2022-01-06 11:30:00;3.37;Sampdoria - Cagliari;HOME;Cagliari;Sampdoria
-31139667;81;2022-01-06 13:30:00;3.72;Lazio - Empoli;HOME;Empoli;Lazio
-31139668;81;2022-01-06 13:30:00;0.68;Spezia - Verona;AWAY;Verona;Spezia
-31139676;81;2022-01-06 17:30:00;;Salernitana - Venezia;AWAY;Venezia;Salernitana
-31139786;81;2022-01-06 17:30:00;0.51;Milan - Roma;HOME;Roma;Milan
-31139788;81;2022-01-06 15:30:00;3.26;Sassuolo - Genoa;HOME;Genoa;Sassuolo
-31139675;81;2022-01-06 19:45:00;4.5;Juventus - Napoli;HOME;Napoli;Juventus
