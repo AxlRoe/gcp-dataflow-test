@@ -18,6 +18,7 @@ from scipy.spatial.distance import cdist
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 from sklearn.preprocessing import PolynomialFeatures
+import scipy.stats as st
 
 SCHEMA = ",".join(
     [
@@ -30,12 +31,24 @@ SCHEMA = ",".join(
     ]
 )
 
-def filter_matches(row):
-    if math.isnan(row['goal_diff_by_prediction']) or math.isnan(row['start_back']):
-        logging.info("[" + row['event_id'] + "] Skipping row because of empty goals or start quote")
-        return False
+def matches_where_favourite_is_winning(df):
+    return df[(df['goal_diff_by_prediction'] >= 1)]
 
-    return int(row['goal_diff_by_prediction']) == 1
+def calculate_sure_bet_perc(df):
+
+    goal_diff_total_df = df[['minute', 'lay']].groupby('minute').count()
+    goal_diff_total_df = goal_diff_total_df.rename(columns={'lay': 'total'})
+
+    goal_diff_for_favourite_df = df[(df['goal_diff_by_prediction']) >= int(1)][['minute', 'lay']].groupby('minute').count()
+    goal_diff_for_favourite_df = goal_diff_for_favourite_df.rename(columns={'lay': 'count'})
+
+    join_ok = goal_diff_total_df.join(goal_diff_for_favourite_df)
+    join_ok['count'] = join_ok.apply(lambda row: 0 if math.isnan(row['count']) else row['count'], axis=1)
+    join_ok['sure_bet_perc_by_min'] = join_ok.apply(lambda row: round((float(row['count']) / float(row['total'])) * 100) / 100, axis=1)
+    join_ok = join_ok.reset_index()
+
+    return pd.merge(df.reset_index(), join_ok[['minute', 'sure_bet_perc_by_min']], how='inner', on=['minute'])
+
 
 def remove_outliers(df):
     h_outliers, l_outliers = find_outlier_by_perc(df, 'start_back')
@@ -72,7 +85,7 @@ def find_outlier_by_perc (df, col):
 
     h_outliers = []
     l_outliers = []
-    if ho_d > dist_p and len(values) - ho < 5: #minum cluster size to not be classified as outlier
+    if ho_d > dist_p and len(values) - ho < 5: #minimum cluster size to not be classified as outlier
         h_outliers.append(np_sorted_values[ho:])
 
     if lo_d > dist_p and lo < 5:  # minum cluster size to not be classified as outlier
@@ -82,14 +95,15 @@ def find_outlier_by_perc (df, col):
 
 class Record(DoFn):
     def process(self, element):
-        back, lay, start_lay, start_back, hgoal, agoal, available, matched, total_available, total_matched, prediction, event_id, runner_name, ts, minute, sum_goals, current_result, goal_diff_by_prediction = element.split(";")
+        back, lay, start_lay, start_back, hgoal, agoal, available, matched, total_available, total_matched, draw_perc, prediction, event_id, runner_name, ts, minute, sum_goals, current_result, goal_diff_by_prediction = element.split(";")
 
         return [{
             'event_id' : event_id,
             'lay': float(lay),
             'start_back': float(start_back) if start_back != '' else float('NaN'),
             'minute': minute,
-            'goal_diff_by_prediction': float(goal_diff_by_prediction) if goal_diff_by_prediction != '' else float('NaN')
+            'goal_diff_by_prediction': float(goal_diff_by_prediction) if goal_diff_by_prediction != '' else float('NaN'),
+            'draw_perc': draw_perc
         }]
 
 def log_scale_quote(row):
@@ -100,18 +114,30 @@ def round_to_quarter(d):
     return str(np.float64((Decimal(d)*2).quantize(Decimal('1'), rounding=ROUND_HALF_UP)/2))
 
 def create_df_by_event(rows):
-    rows.insert(0, ['event_id', 'lay', 'start_back', 'goal_diff_by_prediction', 'minute'])
+    rows.insert(0, ['event_id', 'lay', 'start_back', 'goal_diff_by_prediction', 'minute', 'draw_perc'])
     df = pd.DataFrame(rows[1:], columns=rows[0])
-    return df[['lay', 'start_back', 'goal_diff_by_prediction', 'minute']]
+    return df[['lay', 'start_back', 'goal_diff_by_prediction', 'minute', 'draw_perc']]
+
 
 def compute_and_store_model(df):
 
     q_M = round_to_quarter(df['start_back'].max())
     q_m = round_to_quarter(df['start_back'].min())
+    draw_perc = df['draw_perc'].max()
 
+    #df.to_csv('tmp_df_pipe.csv', sep=';', index=False, encoding="utf-8", line_terminator='\n')
+
+    json_name = str(q_m) + '-' + str(q_M)
+    if q_m == q_M:
+        json_name = str(q_m)
+
+    df['minute'] = pd.to_numeric(df['minute'])
     X_fit = np.arange(0, 120, 2)[:, np.newaxis]
     X = df[['minute']].values
     y = df[['lay']].values
+
+    m_x = X.flatten().min()
+    M_x = 100
 
     pr = LinearRegression()
     quadratic = PolynomialFeatures(degree=5)
@@ -131,22 +157,78 @@ def compute_and_store_model(df):
     X = X.reshape(1,-1).flatten()
     y = y.reshape(1,-1).flatten()
     y_pred = y_quad_fit.reshape(1,-1).flatten()
+    X_fit = X_fit.reshape(1, -1).flatten()
     outlier_selector = np.where(ok, 'b', 'r').reshape(1,-1).flatten()
 
-    json_name = str(q_m) + '-' + str(q_M)
-    summary = {'interval': json_name,
-               'r2': str(round(r2_score(y, y_quad_pred)*100) / 100),
-               'X': list(X),
-               'y': list(y),
-               'pred': list(y_pred),
-               'upper': list(upper),
-               'lower': list(lower),
-               'outliner_selector': list(outlier_selector)
-              }
+    sure_bet_perc_df = df[['minute', 'sure_bet_perc_by_min']].groupby('minute').min()
+    sure_bet_perc_dict = sure_bet_perc_df.to_dict()['sure_bet_perc_by_min']
+
+    # create 95% confidence interval for population mean weight
+    interval = st.t.interval(alpha=0.95, df=len(df['start_back']) - 1, loc=np.mean(df['start_back']), scale=st.sem(df['start_back']))
+    mean_responsibility = 3 * 0.95 * ((interval[1] + interval[0]) / 2 - 1)
+    revenue = 2 * (10 ** y_quad_fit - 1)
+
+    incomes = []
+    for i in range(0, m_x, 2):
+        incomes.append(0)
+
+    for i in np.arange(0, M_x - m_x + 2, 2):
+        idx = int(i / 2)
+        incomes.append(revenue[idx][0] - mean_responsibility)
+
+    # plt.plot(np.arange(0,M_x+2,2), incomes)
+    # plt.axhline(y=1, color='g', linestyle='-')
+    # plt.title("Quote " + json_name)
+    # plt.show()
+
+    minute_axis = list(range(0, 120, 2))
+    incomes = np.array(incomes)
+    tmp_incomes = np.flip(incomes, 0)
+    break_even_index = -1
+    for idx, elem in np.ndenumerate(tmp_incomes):
+        if elem <= 1:
+            break_even_index = incomes.size - idx[0]
+            break
+
+    break_even_minute = minute_axis[break_even_index] if break_even_index >= 0 else -1
+    break_even_income = incomes[break_even_index] if break_even_index >= 0 else -1
+    sure_bet_perc = []
+    for minute in range(0, 80, 10):
+        if minute in sure_bet_perc_dict.keys():
+            sure_bet_perc.append(sure_bet_perc_dict[minute])
+        else:
+            sure_bet_perc.append(0)
+
+    summary = {
+        'break_even_minute': break_even_minute,
+        'break_even_income': break_even_income,
+        'draw_perc': draw_perc,
+        'sure_bet_perc_by_10min': sure_bet_perc
+    }
+
+    # model = {
+    #      'interval': json_name,
+    #      'r2': str(round(r2_score(y, y_quad_pred) * 100) / 100),
+    #      'X': list(X),
+    #      'y': list(y),
+    #      'outlier_selector': list(outlier_selector),
+    #      'pred': list(y_pred),
+    #      'upper': list(upper),
+    #      'lower': list(lower)
+    # }
+
+    # summary = {
+    #     'name': json_name,
+    #     'p_axis': [float(perc) for perc in perc_axis],
+    #     'm_axis': [int(minute) for minute in minute_axis],
+    #     'draw_perc': draw_perc,
+    #     'ok_goal_diff_by_minute': ok_goal_diff_perc_dict,
+    #     'loss': mean_responsibility_quote,
+    #     'revenue': break_even_lay
+    # }
 
     with open('result\\' + json_name + '.json', 'w') as fp:
         json.dump(summary, fp)
-
 
 
 def merge_df(dfs):
@@ -159,7 +241,7 @@ def merge_df(dfs):
 
 def select_start_back_interval(row):
     last_thr = -1
-    for thr in np.arange(3, 10, 0.50):
+    for thr in np.arange(3, 6, 0.50):
         if row['start_back'] >= thr and row['start_back'] < thr + 0.5:
             return str(thr) + '-' + str(thr+0.5)
         last_thr = thr
@@ -174,19 +256,23 @@ def run(input_folder, out_csv, args=None):
     )
 
     with beam.Pipeline(options=pipeline_options) as pipeline:
+
         _ = (
                 pipeline
                 | "Read csvs " >> beam.io.ReadFromText(file_pattern=input_folder + '\*.csv', skip_header_lines=1)
                 | "Parse record " >> beam.ParDo(Record())
-                | "Filter matches with valid start back quote and "
-                  "one goal diff for favourite player " >> beam.Filter(lambda row: filter_matches(row))
+                | "drop rows with nan goal diff " >> beam.Filter(lambda row: not math.isnan(row['start_back']) and not math.isnan(row['goal_diff_by_prediction']))
                 | "Log scale lay quote " >> beam.Map(lambda row: log_scale_quote(row))
                 | "Use start_back interval as key " >> WithKeys(lambda row: select_start_back_interval(row))
                 | 'group rows by quote' >> GroupByKey()
                 | "Get list of records by start_back " >> beam.Map(lambda tuple: tuple[1])
                 | 'Create dataframe by quote ' >> beam.Map(lambda rows: create_df_by_event(rows))
+                | 'Calculate goal diff for favourite by minute ' >> beam.Map(lambda df: calculate_sure_bet_perc(df))
+                | "Filter matches with valid start back quote and "
+                  "one goal diff for favourite player " >> beam.Map(lambda df: matches_where_favourite_is_winning(df))
+                | "discard empty dataframe " >> beam.Filter(lambda df: not df.empty)
                 | 'Remove outliers ' >> beam.Map(lambda df: remove_outliers(df))
-                | 'Calculate and store model ' >> beam.Map(lambda df: compute_and_store_model(df))
+                | 'Calculate risk ' >> beam.Map(lambda df: compute_and_store_model(df))
         )
 
 
