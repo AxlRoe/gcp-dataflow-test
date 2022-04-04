@@ -200,6 +200,9 @@ def compute_and_store_model(df):
             sure_bet_perc.append(0)
 
     summary = {
+        'key': json_name,
+        'q_min': q_m,
+        'q_max': q_M,
         'break_even_minute': break_even_minute,
         'break_even_income': break_even_income,
         'draw_perc': draw_perc,

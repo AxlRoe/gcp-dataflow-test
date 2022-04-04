@@ -6,8 +6,8 @@ psql -c "delete from runner where 1=1" -U postgres postgres
 psql -c "delete from task_execution where 1=1" -U postgres postgres
 
 echo "fill database with match and runners"
-psql -c "\copy match(event_id,competition_id,cutoff_date,event_name,delta,favourite,guest,home,outcome) FROM 'C:\Users\mmarini\MyGit\bet-data-pump\data_"%1"\match.csv' delimiter ';' csv HEADER" -U postgres postgres
-psql -c "\copy runner(id,market_id,runner_id,available,back,lay,market_name,matched,runner_name,total_available,total_matched) FROM 'C:\Users\mmarini\MyGit\bet-data-pump\data_"%1"\runner.csv' delimiter ';' csv HEADER" -U postgres postgres
+psql -c "\copy match FROM 'C:\Users\mmarini\MyGit\bet-data-pump\data_"%1"\match.csv' delimiter ';' csv HEADER" -U postgres postgres
+psql -c "\copy runner FROM 'C:\Users\mmarini\MyGit\bet-data-pump\data_"%1"\runner.csv' delimiter ';' csv HEADER" -U postgres postgres
 psql -c "\copy task_execution FROM 'C:\Users\mmarini\MyGit\bet-data-pump\data_"%1"\task_execution.csv' delimiter ';' csv HEADER" -U postgres postgres
 
 rmdir /S /q prematch stats samples
@@ -46,4 +46,4 @@ cd C:\Users\mmarini\MyGit\gcp-dataflow-test\kafka-to-bigq\bet-ingest
 psql -c "\copy (select * from match where cutoff_date < TO_DATE('"%4"','YYYYMMDD')) To 'csv\match_"%1".csv' delimiter ';' csv HEADER ENCODING 'UTF8'" -U postgres postgres
 psql -c "\copy (select * from runner) To 'csv\runner_"%1".csv' delimiter ';' csv HEADER ENCODING 'UTF8'" -U postgres postgres
 
-rem python match_score_pipeline.py --match_csv match_%1.csv --out_csv match_%1.csv
+python match_score_pipeline.py --match_csv match_%1.csv --out_csv match_%1.csv
