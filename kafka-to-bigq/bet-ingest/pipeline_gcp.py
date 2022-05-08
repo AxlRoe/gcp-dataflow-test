@@ -521,4 +521,4 @@ if __name__ == '__main__':
     )
 
     known_args, pipeline_args = parser.parse_known_args()
-    run(known_args.bootstrap_servers, known_args.match_csv, known_args.runner_csv, known_args.out_csv, pipeline_args)
+    run(known_args.bucket, pipeline_args)
