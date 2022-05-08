@@ -424,7 +424,7 @@ def run(bucket, args=None):
         match_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | 'ReadTable' >> beam.io.ReadFromBigQuery(table=match_table_spec)
+                | 'Read match bq table' >> beam.io.ReadFromBigQuery(table=match_table_spec)
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
         )
@@ -432,7 +432,7 @@ def run(bucket, args=None):
         runner_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | 'ReadTable' >> beam.io.ReadFromBigQuery(table=runner_table_spec)
+                | 'Read runner bq table' >> beam.io.ReadFromBigQuery(table=runner_table_spec)
                 | "Parse runner row " >> beam.ParDo(RunnerRow())
         )
 
