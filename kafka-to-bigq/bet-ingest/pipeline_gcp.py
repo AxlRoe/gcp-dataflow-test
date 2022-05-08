@@ -11,18 +11,15 @@ import random
 from collections import Counter
 from datetime import datetime, time, timedelta
 
-from apache_beam.io.gcp.internal.clients import bigquery
 import apache_beam as beam
 import dateutil
 import numpy as np
 import pandas as pd
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.io import fileio
+from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.transforms import window
-
-import jsonpickle
-from google.cloud import storage
 
 SCHEMA = ",".join(
     [
