@@ -410,7 +410,8 @@ def run(bucket, args=None):
                 | beam.Reshuffle())
         files_and_contents = (
                 readable_files
-                | beam.Map(lambda x: (x.metadata.path, x.read_utf8())))
+                | beam.Map(lambda x: (x.metadata.path, x.read_utf8()))
+                | beam.Map(print))
 
         # stats_tuple = (
         #         pipeline
