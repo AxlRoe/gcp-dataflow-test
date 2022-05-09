@@ -17,6 +17,7 @@ from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.io import fileio
 from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
+from google.cloud import storage
 
 
 def aJson(stats, sample):
@@ -297,6 +298,20 @@ class EnrichWithDrawPercentage (DoFn):
         row_dict['draw_perc'] = score_dict['perc']
         yield row_dict
 
+class ReadFileContent(beam.DoFn):
+
+    def setup(self):
+        # Called whenever the DoFn instance is deserialized on the worker.
+        # This means it can be called more than once per worker because multiple instances of a given DoFn subclass may be created (e.g., due to parallelization, or due to garbage collection after a period of disuse).
+        # This is a good place to connect to database instances, open network connections or other resources.
+        self.storage_client = storage.Client()
+
+    def process(self, file_name, bucket):
+        bucket = self.storage_client.get_bucket(bucket)
+        blob = bucket.get_blob(file_name)
+        yield blob.download_as_string()
+
+
 def merge_df(dfs):
     if not dfs:
         logging.info("No dataframe to concat ")
@@ -350,6 +365,17 @@ def calculate_draw_percentage(tuple):
         'perc': round((draw_match_num / total) * 100) / 100
     }
 
+def list_blobs(bucket):
+    """Lists all the blobs in the bucket."""
+    start_of_day = datetime.combine(datetime.utcnow(), time.min)
+    storage_client = storage.Client()
+    blobs = storage_client.list_blobs(bucket, prefix=start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/')
+    json_paths = []
+    for blob in blobs:
+        #json_paths.append(f"gs://{bucket_name}/{blob.name}")
+        json_paths.append(f"{blob.name}")
+    return json_paths
+
 
 def run(bucket, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
@@ -392,26 +418,15 @@ def run(bucket, args=None):
         #         | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
         # )
 
-        # samples_tuple = (
-        #         pipeline
-        #         | "Matching samples" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/*.json')
-        #         | "Reading sampling" >> fileio.ReadMatches()
-        #         | "shuffle samples " >> beam.Reshuffle()
-        #         | "Convert sample file to json" >> ParDo(JsonParser())
-        #         #| "Flatten samples " >> beam.FlatMap(lambda x: x)
-        #         #| "map samples " >> beam.Map(lambda x: x)
-        #         | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
-        # )
-
-        readable_files = (
+        samples_tuple = (
                 pipeline
-                | fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/*.json')
-                | fileio.ReadMatches()
-                | beam.Reshuffle())
-        files_and_contents = (
-                readable_files
-                | beam.Map(lambda x: x.metadata.path)
-                | beam.Map(print))
+                | 'Create' >> beam.Create(list_blobs(bucket))
+                | 'Read each file content' >> beam.ParDo(ReadFileContent(), bucket)
+                | "Convert sample file to json" >> ParDo(JsonParser())
+                #| "Flatten samples " >> beam.FlatMap(lambda x: x)
+                #| "map samples " >> beam.Map(lambda x: x)
+                | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+        )
 
         # stats_tuple = (
         #         pipeline
