@@ -4,9 +4,6 @@ export GOOGLE_APPLICATION_CREDENTIAL=data-flow-sa.json
 BUCKET_NAME=dump-bucket-3
 PROJECT=scraper-v1
 
-virtualenv env
-source env/bin/activate
-pip install -U -r requirements.txt
 
 python pipeline_gcp.py \
 --job data-preparation \
