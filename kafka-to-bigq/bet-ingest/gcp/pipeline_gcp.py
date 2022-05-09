@@ -231,19 +231,18 @@ class MatchRow (DoFn):
 
 class RunnerRow (DoFn):
     def process(self, element):
-        id, market_id, runner_id, available, back, lay, market_name, matched, runner_name, total_available, total_matched = element.split(";")
         return [{
-            'id': id,
-            'runner_id': runner_id,
-            'available': available,
-            'back': float(back),
-            'lay': float(lay),
-            'market_id': market_id,
-            'market_name': market_name,
-            'matched': matched,
-            'runner_name': runner_name,
-            'total_available': round(float(total_available) * 100) / 100,
-            'total_matched': round(float(total_matched) * 100) / 100
+            'id': element['id'],
+            'runner_id': element['runner_id'],
+            'available': element['available'],
+            'back': element['float(back)'],
+            'lay': element['float(lay)'],
+            'market_id': element['market_id'],
+            'market_name': element['market_name'],
+            'matched': element['matched'],
+            'runner_name': element['runner_name'],
+            'total_available': round(float(element['total_available']) * 100) / 100,
+            'total_matched': round(float(element['total_matched']) * 100) / 100
         }]
 
 class EnrichWithStartQuotes (DoFn):
