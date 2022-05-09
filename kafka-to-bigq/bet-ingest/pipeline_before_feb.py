@@ -277,10 +277,7 @@ class RecordToGCSBucket(beam.PTransform):
 
 class MatchRow (DoFn):
     def process(self, element):
-        # TODO valid before 18/2
-        # event_id, competition_id, cutoff_date, delta, event_name, favourite, guest, home, score = element.split(";")
-        # TODO valid since 18/2
-        event_id, competition_id, cutoff_date, event_name, delta, guest, home, favourite, score = element.split(";")
+        event_id, competition_id, cutoff_date, delta, event_name, favourite, guest, home, score = element.split(";")
         if favourite == '':
             return []
 
@@ -439,7 +436,6 @@ def run(bootstrap_servers, match_csv, runner_csv, out_csv, args=None):
 
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
-        #TODO source wiil be replaced by bigquery
         match_dict = (
                 pipeline
                 | "Matching csvs" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\csv_enrich\\*.csv')

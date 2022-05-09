@@ -3,11 +3,9 @@
 from __future__ import absolute_import
 
 import argparse
-import ast
 import json
 import logging
 import math
-import random
 from collections import Counter
 from datetime import datetime, time, timedelta
 
@@ -17,19 +15,9 @@ import numpy as np
 import pandas as pd
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.io import fileio
+from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.transforms import window
 
-SCHEMA = ",".join(
-    [
-        "id:STRING",
-        "market_name:STRING",
-        "runner_name:STRING",
-        "lay:FLOAT64",
-        "back:FLOAT64",
-        "ts: TIMESTAMP"
-    ]
-)
 
 def aJson(stats, sample):
     return {
@@ -205,12 +193,6 @@ class JsonReader(beam.PTransform):
                 | "Read json from storage" >> ParDo(JsonParser())
         )
 
-class CSVParser(DoFn):
-    def process (self, file):
-        data = file.read_utf8()
-        lines = data.split("\n")
-        yield lines[1:-1]
-
 
 class JsonParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
@@ -233,83 +215,34 @@ class JsonParser(DoFn):
         logging.info("Parsed json ")
         yield sample
 
-
-class RecordToGCSBucket(beam.PTransform):
-
-    def __init__(self, num_shards=5):
-        # Set window size to 60 seconds.
-        self.num_shards = num_shards
-
-    def expand(self, pcoll):
-
-        def gcs_path_builder(message):
-            k, record = message
-            # the records have 'value' attribute when --with_metadata is given
-            if hasattr(record, 'value'):
-                message_bytes = record.value
-            elif isinstance(record, tuple):
-                message_bytes = record[1]
-            elif isinstance(record, list):
-                message_bytes = record[0]
-            else:
-                raise RuntimeError('unknown record type: %s' % type(record))
-            # Converting bytes record from Kafka to a dictionary.
-            message = ast.literal_eval(message_bytes.decode("UTF-8"))
-            logging.info("MSG IS " + str(message))
-            return 'gs://data-flow-bucket_1/' + message['event_id'] + '/*.json'
-            # return 'C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\' + message['event_id'] + '\\*.json'
-
-        return (
-                pcoll
-                # Bind window info to each element using element timestamp (or publish time).
-                | "Window into fixed intervals" >> beam.WindowInto(window.FixedWindows(15, 0))
-                | "Add key" >> WithKeys(lambda _: random.randint(0, self.num_shards - 1))
-                # Group windowed elements by key. All the elements in the same window must fit
-                # memory for this. If not, you need to use `beam.util.BatchElements`.
-                | "Group by key" >> GroupByKey()
-                | "Read event id from message" >> beam.Map(lambda message: gcs_path_builder(message))
-                | "Read files to ingest " >> fileio.MatchAll()
-                | "Convert result from match file to readable file " >> fileio.ReadMatches()
-                | "shuffle " >> beam.Reshuffle()
-                | "Convert file to json" >> JsonReader()
-                | "Flatten samples " >> beam.FlatMap(lambda x: x)
-        )
-
 class MatchRow (DoFn):
     def process(self, element):
-        # TODO valid before 18/2
         # event_id, competition_id, cutoff_date, delta, event_name, favourite, guest, home, score = element.split(";")
-        # TODO valid since 18/2
-        event_id, competition_id, cutoff_date, event_name, delta, guest, home, favourite, score = element.split(";")
-        if favourite == '':
-            return []
-
         return [{
-            'event_id': event_id,
-            'competition_id': competition_id,
-            'cutoff_date': cutoff_date,
-            'event_name': event_name,
-            'guest': guest,
-            'home': home,
-            'favourite': favourite,
-            'score': score
+            'event_id': element['event_id'],
+            'competition_id': element['competition_id'],
+            'cutoff_date': element['cutoff_date'],
+            'event_name': element['event_name'],
+            'guest': element['guest'],
+            'home': element['home'],
+            'favourite': element['favourite'],
+            'score': element['score']
         }]
 
 class RunnerRow (DoFn):
     def process(self, element):
-        id, market_id, runner_id, available, back, lay, market_name, matched, runner_name, total_available, total_matched = element.split(";")
         return [{
-            'id': id,
-            'runner_id': runner_id,
-            'available': available,
-            'back': float(back),
-            'lay': float(lay),
-            'market_id': market_id,
-            'market_name': market_name,
-            'matched': matched,
-            'runner_name': runner_name,
-            'total_available': round(float(total_available) * 100) / 100,
-            'total_matched': round(float(total_matched) * 100) / 100
+            'id': element['id'],
+            'runner_id': element['runner_id'],
+            'available': element['available'],
+            'back': element['float(back)'],
+            'lay': element['float(lay)'],
+            'market_id': element['market_id'],
+            'market_name': element['market_name'],
+            'matched': element['matched'],
+            'runner_name': element['runner_name'],
+            'total_available': round(float(element['total_available']) * 100) / 100,
+            'total_matched': round(float(element['total_matched']) * 100) / 100
         }]
 
 class EnrichWithStartQuotes (DoFn):
@@ -403,7 +336,6 @@ def select_start_back_interval(row):
 
     return str(last_thr)
 
-#TODO non viene calcolato su tutti i match ma solo su quelli giorno per giorno
 def calculate_draw_percentage(tuple):
     df = tuple[1]
     draw_match_num = df[(df['score'] == 'DRAW')].shape[0]
@@ -415,47 +347,30 @@ def calculate_draw_percentage(tuple):
     }
 
 
-def run(bootstrap_servers, match_csv, runner_csv, out_csv, args=None):
+def run(bucket, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
     pipeline_options = PipelineOptions(
-        args, streaming=True, save_main_session=True
+        args, save_main_session=True
     )
 
-    # with Pipeline(options=pipeline_options) as pipeline:
-    #     (pipeline
-    #      # | ReadFromKafka(consumer_config={'bootstrap.servers': bootstrap_servers},
-    #      #                 topics=['exchange.ended.events'])
-    #      | "Read from Pub/Sub" >> ReadFromPubSub(topic='projects/data-flow-test-327119/topics/exchange.ended.events').with_output_types(bytes)
-    #      | "Read files " >> RecordToGCSBucket(5)
-    #      | "Write to BigQuery" >> bigquery.WriteToBigQuery(bigquery.TableReference(
-    #                 projectId='data-flow-test-327119',
-    #                 datasetId='kafka_to_bigquery',
-    #                 tableId='transactions'),
-    #                 schema=SCHEMA,
-    #                 write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-    #                 create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
-    #      )
-
+    start_of_day = datetime.combine(datetime.utcnow(), time.min)
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
-        #TODO source wiil be replaced by bigquery
+        match_table_spec = bigquery.TableReference(projectId='scraper-v1', datasetId='bet', tableId='match')
+        runner_table_spec = bigquery.TableReference(projectId='scraper-v1', datasetId='bet', tableId='runner')
         match_dict = (
                 pipeline
-                | "Matching csvs" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\csv_enrich\\*.csv')
-                | "Reading csvs" >> fileio.ReadMatches()
-                | "Conver csvs in list of lists" >> ParDo(CSVParser())
-                | "flatten " >> beam.FlatMap(lambda x: x)
+                # Each row is a dictionary where the keys are the BigQuery columns
+                | 'Read match bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-3/tmp/', table=match_table_spec)
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
         )
 
         runner_dict = (
                 pipeline
-                | "Matching runner csvs" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\csv\\runner*.csv')
-                | "Reading runner csvs" >> fileio.ReadMatches()
-                | "Convert runner csvs in list of lists" >> ParDo(CSVParser())
-                | "flatten runner lines" >> beam.FlatMap(lambda x: x)
+                # Each row is a dictionary where the keys are the BigQuery columns
+                | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-3/tmp/', table=runner_table_spec)
                 | "Parse runner row " >> beam.ParDo(RunnerRow())
         )
 
@@ -475,7 +390,7 @@ def run(bootstrap_servers, match_csv, runner_csv, out_csv, args=None):
 
         samples_tuple = (
                 pipeline
-                | "Matching samples" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\samples\\*.json')
+                | "Matching samples" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/*.json')
                 | "Reading sampling" >> fileio.ReadMatches()
                 | "Convert sample file to json" >> JsonReader()
                 | "Flatten samples " >> beam.FlatMap(lambda x: x)
@@ -485,7 +400,7 @@ def run(bootstrap_servers, match_csv, runner_csv, out_csv, args=None):
 
         stats_tuple = (
                 pipeline
-                | "Matching stats" >> fileio.MatchFiles('C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\stats\\*.json')
+                | "Matching stats" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/stats/*.json')
                 | "Reading stats " >> fileio.ReadMatches()
                 | "Convert stats file to json" >> JsonReader()
                 | "Flatten stats " >> beam.FlatMap(lambda x: x)
@@ -508,6 +423,7 @@ def run(bootstrap_servers, match_csv, runner_csv, out_csv, args=None):
                 | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
         )
 
+        out_csv = 'gs://' + bucket + '/stage/data_' + start_of_day.strftime('%Y-%m-%d') + '.csv'
         _ = (samples_enriched_with_start_quotes
                 | 'Enrich sample with home and guest ' >> beam.ParDo(EnrichWithPrediction(), beam.pvalue.AsList(match_dict))
                 | 'Enrich sample with draw percentage ' >> beam.ParDo(EnrichWithDrawPercentage(), beam.pvalue.AsList(draw_percentage_by_start_back_interval))
@@ -534,31 +450,13 @@ def run(bootstrap_servers, match_csv, runner_csv, out_csv, args=None):
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--bootstrap_servers',
-        dest='bootstrap_servers',
-        required=True,
-        help='Bootstrap servers for the Kafka cluster. Should be accessible by the runner'
-    )
-    parser.add_argument(
-        '--match_csv',
-        dest='match_csv',
-        required=True,
-        help='csv with the match to consider'
-    )
-    parser.add_argument(
-        '--runner_csv',
-        dest='runner_csv',
-        required=True,
-        help='csv with the runner to consider'
-    )
 
     parser.add_argument(
-        '--out_csv',
-        dest='out_csv',
+        '--bucket',
+        dest='bucket',
         required=True,
-        help='csv with the output of the pipeline'
+        help='bucket where read/write csv'
     )
 
     known_args, pipeline_args = parser.parse_known_args()
-    run(known_args.bootstrap_servers, known_args.match_csv, known_args.runner_csv, known_args.out_csv, pipeline_args)
+    run(known_args.bucket, pipeline_args)
