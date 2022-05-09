@@ -9,7 +9,7 @@ source env/bin/activate
 pip install -U -r requirements.txt
 
 python pipeline_gcp.py \
---bucket $BUCKET_NAME
+--bucket $BUCKET_NAME \
 --region europe-west1 \
 --runner DataflowRunner \
 --project scraper-v1 \
