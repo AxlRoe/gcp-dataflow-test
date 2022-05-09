@@ -200,6 +200,10 @@ class JsonParser(DoFn):
         publish time into a tuple.
         """
         # yield json.loads('{"id": "1", "market_name" : "test", "runner_name" : "test", "ts" : "2021-10-05T15:50:00.890Z", "lay": 1.0, "back" : 1.0}')
+        if not file:
+            logging.info("File read is null")
+            yield json.loads('{}')
+
         data = file.read_utf8()
         if not data:
             logging.info("Json read is null")
@@ -392,9 +396,10 @@ def run(bucket, args=None):
                 pipeline
                 | "Matching samples" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/*.json')
                 | "Reading sampling" >> fileio.ReadMatches()
-                | "Convert sample file to json" >> JsonReader()
-                | "Flatten samples " >> beam.FlatMap(lambda x: x)
-                | "map samples " >> beam.Map(lambda x: x)
+                | "shuffle samples " >> beam.Reshuffle()
+                | "Convert sample file to json" >> ParDo(JsonParser())
+                #| "Flatten samples " >> beam.FlatMap(lambda x: x)
+                #| "map samples " >> beam.Map(lambda x: x)
                 | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
 
