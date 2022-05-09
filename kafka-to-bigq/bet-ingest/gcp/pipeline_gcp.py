@@ -392,20 +392,20 @@ def run(bucket, args=None):
         #         | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
         # )
 
-        samples_tuple = (
-                pipeline
-                | "Matching samples" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/*.json')
-                | "Reading sampling" >> fileio.ReadMatches()
-                | "shuffle samples " >> beam.Reshuffle()
-                | "Convert sample file to json" >> ParDo(JsonParser())
-                #| "Flatten samples " >> beam.FlatMap(lambda x: x)
-                #| "map samples " >> beam.Map(lambda x: x)
-                | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
-        )
+        # samples_tuple = (
+        #         pipeline
+        #         | "Matching samples" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/*.json')
+        #         | "Reading sampling" >> fileio.ReadMatches()
+        #         | "shuffle samples " >> beam.Reshuffle()
+        #         | "Convert sample file to json" >> ParDo(JsonParser())
+        #         #| "Flatten samples " >> beam.FlatMap(lambda x: x)
+        #         #| "map samples " >> beam.Map(lambda x: x)
+        #         | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+        # )
 
         readable_files = (
                 pipeline
-                | fileio.MatchFiles('hdfs://path/to/*.txt')
+                | fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/*.json')
                 | fileio.ReadMatches()
                 | beam.Reshuffle())
         files_and_contents = (
