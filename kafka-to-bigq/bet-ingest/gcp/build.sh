@@ -12,14 +12,9 @@ python pipeline_gcp.py \
 --job data-preparation \
 --bucket $BUCKET_NAME \
 --region europe-west1 \
---runner DataflowRunner \
+--runner DirectRunner \
 --project scraper-v1 \
 --temp_location gs://dump-bucket-3/tmp/ \
 --experiment use_unsupported_python_version pipeline \
 --staging_location gs://$BUCKET_NAME/staging
-
-
-python pipeline_gcp.py --job data-preparation --bucket $BUCKET_NAME --region europe-west1 --runner DataflowRunner --project scraper-v1 --temp_location gs://dump-bucket-3/tmp/ --experiment use_unsupported_python_version pipeline --staging_location gs://dump-bucket-3/staging
-
-
 

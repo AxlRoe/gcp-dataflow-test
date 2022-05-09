@@ -226,7 +226,7 @@ class MatchRow (DoFn):
             'guest': element['guest'],
             'home': element['home'],
             'favourite': element['favourite'],
-            'score': element['score']
+            'score': element['outcome']
         }]
 
 class RunnerRow (DoFn):
