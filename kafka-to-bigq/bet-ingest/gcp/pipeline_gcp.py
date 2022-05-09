@@ -3,11 +3,9 @@
 from __future__ import absolute_import
 
 import argparse
-import ast
 import json
 import logging
 import math
-import random
 from collections import Counter
 from datetime import datetime, time, timedelta
 
@@ -19,18 +17,7 @@ from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.io import fileio
 from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.transforms import window
 
-SCHEMA = ",".join(
-    [
-        "id:STRING",
-        "market_name:STRING",
-        "runner_name:STRING",
-        "lay:FLOAT64",
-        "back:FLOAT64",
-        "ts: TIMESTAMP"
-    ]
-)
 
 def aJson(stats, sample):
     return {
@@ -206,12 +193,6 @@ class JsonReader(beam.PTransform):
                 | "Read json from storage" >> ParDo(JsonParser())
         )
 
-class CSVParser(DoFn):
-    def process (self, file):
-        data = file.read_utf8()
-        lines = data.split("\n")
-        yield lines[1:-1]
-
 
 class JsonParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
@@ -233,48 +214,6 @@ class JsonParser(DoFn):
 
         logging.info("Parsed json ")
         yield sample
-
-
-class RecordToGCSBucket(beam.PTransform):
-
-    def __init__(self, num_shards=5):
-        # Set window size to 60 seconds.
-        self.num_shards = num_shards
-
-    def expand(self, pcoll):
-
-        def gcs_path_builder(message):
-            k, record = message
-            # the records have 'value' attribute when --with_metadata is given
-            if hasattr(record, 'value'):
-                message_bytes = record.value
-            elif isinstance(record, tuple):
-                message_bytes = record[1]
-            elif isinstance(record, list):
-                message_bytes = record[0]
-            else:
-                raise RuntimeError('unknown record type: %s' % type(record))
-            # Converting bytes record from Kafka to a dictionary.
-            message = ast.literal_eval(message_bytes.decode("UTF-8"))
-            logging.info("MSG IS " + str(message))
-            return 'gs://data-flow-bucket_1/' + message['event_id'] + '/*.json'
-            # return 'C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\' + message['event_id'] + '\\*.json'
-
-        return (
-                pcoll
-                # Bind window info to each element using element timestamp (or publish time).
-                | "Window into fixed intervals" >> beam.WindowInto(window.FixedWindows(15, 0))
-                | "Add key" >> WithKeys(lambda _: random.randint(0, self.num_shards - 1))
-                # Group windowed elements by key. All the elements in the same window must fit
-                # memory for this. If not, you need to use `beam.util.BatchElements`.
-                | "Group by key" >> GroupByKey()
-                | "Read event id from message" >> beam.Map(lambda message: gcs_path_builder(message))
-                | "Read files to ingest " >> fileio.MatchAll()
-                | "Convert result from match file to readable file " >> fileio.ReadMatches()
-                | "shuffle " >> beam.Reshuffle()
-                | "Convert file to json" >> JsonReader()
-                | "Flatten samples " >> beam.FlatMap(lambda x: x)
-        )
 
 class MatchRow (DoFn):
     def process(self, element):
@@ -413,7 +352,7 @@ def run(bucket, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
     pipeline_options = PipelineOptions(
-        args, streaming=True, save_main_session=True
+        args, save_main_session=True
     )
 
     start_of_day = datetime.combine(datetime.utcnow(), time.min)
@@ -432,7 +371,7 @@ def run(bucket, args=None):
         runner_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | 'Read runner bq table' >> beam.io.ReadFromBigQuery(table=runner_table_spec)
+                | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-3/tmp/', table=runner_table_spec)
                 | "Parse runner row " >> beam.ParDo(RunnerRow())
         )
 
