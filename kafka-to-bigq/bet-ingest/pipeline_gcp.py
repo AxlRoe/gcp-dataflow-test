@@ -424,7 +424,7 @@ def run(bucket, args=None):
         match_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | 'Read match bq table' >> beam.io.ReadFromBigQuery(table=match_table_spec)
+                | 'Read match bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-3/tmp/', table=match_table_spec)
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
         )

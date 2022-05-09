@@ -13,5 +13,5 @@ python pipeline_gcp.py \
 --region europe-west1 \
 --runner DataflowRunner \
 --project scraper-v1 \
---temp_location gs://$BUCKET_NAME/tmp/ \
+--temp_location gs://dump-bucket-3/tmp/ \
 --staging_location gs://$BUCKET_NAME/staging
