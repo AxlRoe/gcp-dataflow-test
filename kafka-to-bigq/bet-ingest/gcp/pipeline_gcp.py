@@ -394,7 +394,7 @@ def run(bucket, args=None):
 
         samples_tuple = (
                 pipeline
-                | "Matching samples" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/pippo/*.json')
+                | "Matching samples" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/*.json')
                 | "Reading sampling" >> fileio.ReadMatches()
                 | "shuffle samples " >> beam.Reshuffle()
                 | "Convert sample file to json" >> ParDo(JsonParser())
@@ -402,6 +402,15 @@ def run(bucket, args=None):
                 #| "map samples " >> beam.Map(lambda x: x)
                 | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
+
+        readable_files = (
+                pipeline
+                | fileio.MatchFiles('hdfs://path/to/*.txt')
+                | fileio.ReadMatches()
+                | beam.Reshuffle())
+        files_and_contents = (
+                readable_files
+                | beam.Map(lambda x: (x.metadata.path, x.read_utf8())))
 
         # stats_tuple = (
         #         pipeline
