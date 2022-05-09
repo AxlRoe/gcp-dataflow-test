@@ -13,6 +13,7 @@ python pipeline_gcp.py \
 --region europe-west1 \
 --runner DataflowRunner \
 --project scraper-v1 \
+--streaming False \
 --temp_location gs://dump-bucket-3/tmp/ \
 --experiment use_unsupported_python_version pipeline \
 --staging_location gs://$BUCKET_NAME/staging
