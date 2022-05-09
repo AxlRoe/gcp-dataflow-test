@@ -205,7 +205,7 @@ class JsonParser(DoFn):
             logging.info("File read is null")
             yield json.loads('{}')
 
-        data = file.read_utf8()
+        data = file.decode('utf-8')
         if not data:
             logging.info("Json read is null")
             yield json.loads('{}')
