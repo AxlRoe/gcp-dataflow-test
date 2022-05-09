@@ -452,7 +452,7 @@ def run(bucket, args=None):
 
         samples_tuple = (
                 pipeline
-                | "Matching samples" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%d') + '/dump/live/*.json')
+                | "Matching samples" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/*.json')
                 | "Reading sampling" >> fileio.ReadMatches()
                 | "Convert sample file to json" >> JsonReader()
                 | "Flatten samples " >> beam.FlatMap(lambda x: x)
@@ -462,7 +462,7 @@ def run(bucket, args=None):
 
         stats_tuple = (
                 pipeline
-                | "Matching stats" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%d') + '/dump/stats/*.json')
+                | "Matching stats" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/stats/*.json')
                 | "Reading stats " >> fileio.ReadMatches()
                 | "Convert stats file to json" >> JsonReader()
                 | "Flatten stats " >> beam.FlatMap(lambda x: x)
