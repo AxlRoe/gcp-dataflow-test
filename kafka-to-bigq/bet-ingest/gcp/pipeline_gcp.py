@@ -313,37 +313,12 @@ class ReadFileContent(DoFn):
         yield blob.download_as_string()
 
 
-class GetQuoteAndScore(DoFn):
-    def process(self, merged_tuple):
-        if not merged_tuple[1]['matches'] or not merged_tuple[1]['runners']:
-            return {}
-
-        match = merged_tuple[1]['matches'][0]
-        runner = merged_tuple[1]['runners'][0]
-        record = {}
-        record['id'] = match['event_id']
-        record['start_back'] = runner['back']
-        record['score'] = match['score']
-        return record
-
-
 def merge_df(dfs):
     if not dfs:
         logging.info("No dataframe to concat ")
         return pd.DataFrame([])
 
     return pd.concat(dfs).reset_index(drop=True)
-
-class CalculateDrawPercentage(DoFn):
-    def process(self, tuple):
-        df = tuple[1]
-        draw_match_num = df[(df['score'] == 'DRAW')].shape[0]
-        total = df.shape[0]
-        return {
-            'start': tuple[0].split('-')[0],
-            'end': tuple[0].split('-')[-1],
-            'perc': round((draw_match_num / total) * 100) / 100
-        }
 
 def list_blobs(bucket, path):
     """Lists all the blobs in the bucket."""
@@ -363,6 +338,29 @@ def run(bucket, args=None):
     pipeline_options = PipelineOptions(
         args, save_main_session=True
     )
+
+    def calculate_draw_percentage(tuple):
+        df = tuple[1]
+        draw_match_num = df[(df['score'] == 'DRAW')].shape[0]
+        total = df.shape[0]
+        return {
+            'start': tuple[0].split('-')[0],
+            'end': tuple[0].split('-')[-1],
+            'perc': round((draw_match_num / total) * 100) / 100
+        }
+
+    def get_quote_and_score(merged_tuple):
+
+        if not merged_tuple[1]['matches'] or not merged_tuple[1]['runners']:
+            return {}
+
+        match = merged_tuple[1]['matches'][0]
+        runner = merged_tuple[1]['runners'][0]
+        record = {}
+        record['id'] = match['event_id']
+        record['start_back'] = runner['back']
+        record['score'] = match['score']
+        return record
 
     def select_start_back_interval(row):
 
@@ -414,17 +412,17 @@ def run(bucket, args=None):
         draw_percentage_by_start_back_interval = (
                 ({'matches': match_dict_with_key, 'runners': runner_dict_with_key})
                 | 'Join match and runners' >> beam.CoGroupByKey()
-                | 'get start back and score' >> beam.ParDo(GetQuoteAndScore())
-                | 'Use start_back interval as key ' >> WithKeys(lambda row: select_start_back_interval(row)) #TODO not sure if it's correct
+                | 'get start back and score' >> beam.Map(lambda x: get_quote_and_score(x))
+                | 'Use start_back interval as key ' >> WithKeys(lambda row: select_start_back_interval(row))
                 | 'Drop invalid keys  ' >> beam.Filter(lambda tuple: tuple[0] != '-1')
                 | 'group by start back interval ' >> GroupByKey()
                 | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
-                | 'calculate draw percentage ' >> beam.ParDo(CalculateDrawPercentage())
+                | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
         )
 
         # samples_tuple = (
         #         pipeline
-        #         | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
+        #         | 'Create sample pcoll' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
         #         | 'Read each sample file ' >> beam.ParDo(ReadFileContent(), bucket)
         #         | "Convert sample file to json" >> ParDo(JsonParser())
         #         #| "Flatten samples " >> beam.FlatMap(lambda x: x)
@@ -434,7 +432,7 @@ def run(bucket, args=None):
         #
         # stats_tuple = (
         #         pipeline
-        #         | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/stats'))
+        #         | 'Create stats pcoll' >> beam.Create(list_blobs(bucket, start_of_day + '/stats'))
         #         | 'Read each stats file ' >> beam.ParDo(ReadFileContent(), bucket)
         #         | "Convert stats file to json" >> JsonReader()
         #         | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
