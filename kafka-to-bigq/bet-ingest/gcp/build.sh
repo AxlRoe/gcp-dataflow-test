@@ -10,7 +10,6 @@ source venv/bin/activate
 python prepare_main.py \
 --job data-preparation \
 --project $PROJECT \
---bucket $BUCKET_NAME \
 --region europe-west1 \
 --setup_file ./setup.py \
 --runner DataflowRunner \
@@ -18,3 +17,4 @@ python prepare_main.py \
 --requirements_file requirements.txt \
 --temp_location gs://dump-bucket-4/tmp/ \
 --experiment use_unsupported_python_version pipeline
+#--bucket $BUCKET_NAME \
