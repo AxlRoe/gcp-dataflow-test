@@ -298,7 +298,7 @@ class EnrichWithDrawPercentage (DoFn):
         row_dict['draw_perc'] = score_dict['perc']
         yield row_dict
 
-class ReadFileContent(beam.DoFn):
+class ReadFileContent(DoFn):
 
     # def setup(self):
     #     # Called whenever the DoFn instance is deserialized on the worker.
@@ -313,6 +313,20 @@ class ReadFileContent(beam.DoFn):
         yield blob.download_as_string()
 
 
+class GetQuoteAndScore(DoFn):
+    def process(self, merged_tuple):
+        if not merged_tuple[1]['matches'] or not merged_tuple[1]['runners']:
+            return {}
+
+        match = merged_tuple[1]['matches'][0]
+        runner = merged_tuple[1]['runners'][0]
+        record = {}
+        record['id'] = match['event_id']
+        record['start_back'] = runner['back']
+        record['score'] = match['score']
+        return record
+
+
 def merge_df(dfs):
     if not dfs:
         logging.info("No dataframe to concat ")
@@ -320,18 +334,7 @@ def merge_df(dfs):
 
     return pd.concat(dfs).reset_index(drop=True)
 
-def get_quote_and_score (merged_tuple):
 
-    if not merged_tuple[1]['matches'] or not merged_tuple[1]['runners']:
-        return {}
-
-    match = merged_tuple[1]['matches'][0]
-    runner = merged_tuple[1]['runners'][0]
-    record = {}
-    record['id'] = match['event_id']
-    record['start_back'] = runner['back']
-    record['score'] = match['score']
-    return record
 
 def select_start_back_interval(row):
 
@@ -411,7 +414,7 @@ def run(bucket, args=None):
         draw_percentage_by_start_back_interval = (
                 ({'matches': match_dict_with_key, 'runners': runner_dict_with_key})
                 | 'Join match and runners' >> beam.CoGroupByKey()
-                | 'get start back and score' >> beam.Map(lambda x: get_quote_and_score(x))
+                | 'get start back and score' >> beam.ParDo(GetQuoteAndScore())
                 | 'Use start_back interval as key ' >> WithKeys(lambda row: select_start_back_interval(row))
                 | 'Drop invalid keys  ' >> beam.Filter(lambda tuple: tuple[0] != '-1')
                 | 'group by start back interval ' >> GroupByKey()
