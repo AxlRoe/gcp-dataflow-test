@@ -365,11 +365,11 @@ def calculate_draw_percentage(tuple):
         'perc': round((draw_match_num / total) * 100) / 100
     }
 
-def list_blobs(bucket):
+def list_blobs(bucket, path):
     """Lists all the blobs in the bucket."""
     start_of_day = datetime.combine(datetime.utcnow(), time.min)
     storage_client = storage.Client()
-    blobs = storage_client.list_blobs(bucket, prefix=start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/live/')
+    blobs = storage_client.list_blobs(bucket, prefix=start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/' + path)
     json_paths = []
     for blob in blobs:
         #json_paths.append(f"gs://{bucket_name}/{blob.name}")
@@ -384,7 +384,7 @@ def run(bucket, args=None):
         args, save_main_session=True
     )
 
-    start_of_day = datetime.combine(datetime.utcnow(), time.min)
+    start_of_day = datetime.combine(datetime.utcnow(), time.min).strftime("%Y-%m-%d")
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
         # match_table_spec = bigquery.TableReference(projectId='scraper-v1', datasetId='bet', tableId='match')
@@ -420,7 +420,7 @@ def run(bucket, args=None):
 
         samples_tuple = (
                 pipeline
-                | 'Create' >> beam.Create(list_blobs(bucket))
+                | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
                 | 'Read each file content' >> beam.ParDo(ReadFileContent(), bucket)
                 | "Convert sample file to json" >> ParDo(JsonParser())
                 #| "Flatten samples " >> beam.FlatMap(lambda x: x)
