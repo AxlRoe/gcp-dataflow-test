@@ -397,37 +397,37 @@ def run(bucket, args=None):
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
         )
-        #
-        # runner_dict = (
-        #         pipeline
-        #         # Each row is a dictionary where the keys are the BigQuery columns
-        #         | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-4/tmp/', table=runner_table_spec)
-        #         | "Parse runner row " >> beam.ParDo(RunnerRow())
-        # )
-        #
-        # match_dict_with_key = (match_dict | "add key for match" >> WithKeys(lambda x: x['event_id']))
-        # runner_dict_with_key = (runner_dict | "add key for runner " >> WithKeys(lambda x: x['id']))
-        #
-        # draw_percentage_by_start_back_interval = (
-        #         ({'matches': match_dict_with_key, 'runners': runner_dict_with_key})
-        #         | 'Join match and runners' >> beam.CoGroupByKey()
-        #         | 'get start back and score' >> beam.Map(lambda x: get_quote_and_score(x))
-        #         | 'Use start_back interval as key ' >> WithKeys(lambda row: select_start_back_interval(row))
-        #         | 'Drop invalid keys  ' >> beam.Filter(lambda tuple: tuple[0] != '-1')
-        #         | 'group by start back interval ' >> GroupByKey()
-        #         | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
-        #         | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
-        # )
 
-        samples_tuple = (
+        runner_dict = (
                 pipeline
-                | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
-                | 'Read each file content' >> beam.ParDo(ReadFileContent(), bucket)
-                | "Convert sample file to json" >> ParDo(JsonParser())
-                #| "Flatten samples " >> beam.FlatMap(lambda x: x)
-                #| "map samples " >> beam.Map(lambda x: x)
-                | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+                # Each row is a dictionary where the keys are the BigQuery columns
+                | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-4/tmp/', table=runner_table_spec)
+                | "Parse runner row " >> beam.ParDo(RunnerRow())
         )
+
+        match_dict_with_key = (match_dict | "add key for match" >> WithKeys(lambda x: x['event_id']))
+        runner_dict_with_key = (runner_dict | "add key for runner " >> WithKeys(lambda x: x['id']))
+
+        draw_percentage_by_start_back_interval = (
+                ({'matches': match_dict_with_key, 'runners': runner_dict_with_key})
+                | 'Join match and runners' >> beam.CoGroupByKey()
+                | 'get start back and score' >> beam.Map(lambda x: get_quote_and_score(x))
+                | 'Use start_back interval as key ' >> WithKeys(lambda row: select_start_back_interval(row))
+                | 'Drop invalid keys  ' >> beam.Filter(lambda tuple: tuple[0] != '-1')
+                | 'group by start back interval ' >> GroupByKey()
+                | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
+                | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
+        )
+
+        # samples_tuple = (
+        #         pipeline
+        #         | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
+        #         | 'Read each file content' >> beam.ParDo(ReadFileContent(), bucket)
+        #         | "Convert sample file to json" >> ParDo(JsonParser())
+        #         #| "Flatten samples " >> beam.FlatMap(lambda x: x)
+        #         #| "map samples " >> beam.Map(lambda x: x)
+        #         | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+        # )
 
         # stats_tuple = (
         #         pipeline
