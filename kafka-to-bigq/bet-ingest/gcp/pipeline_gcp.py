@@ -404,16 +404,16 @@ def run(bucket, args=None):
         match_dict_with_key = (match_dict | "add key for match" >> WithKeys(lambda x: x['event_id']))
         runner_dict_with_key = (runner_dict | "add key for runner " >> WithKeys(lambda x: x['id']))
 
-        # draw_percentage_by_start_back_interval = (
-        #         ({'matches': match_dict_with_key, 'runners': runner_dict_with_key})
-        #         | 'Join match and runners' >> beam.CoGroupByKey()
-        #         | 'get start back and score' >> beam.Map(lambda x: get_quote_and_score(x))
-        #         | 'Use start_back interval as key ' >> WithKeys(lambda row: select_start_back_interval(row))
-        #         | 'Drop invalid keys  ' >> beam.Filter(lambda tuple: tuple[0] != '-1')
-        #         | 'group by start back interval ' >> GroupByKey()
-        #         | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
-        #         | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
-        # )
+        draw_percentage_by_start_back_interval = (
+                ({'matches': match_dict_with_key, 'runners': runner_dict_with_key})
+                | 'Join match and runners' >> beam.CoGroupByKey()
+                | 'get start back and score' >> beam.Map(lambda x: get_quote_and_score(x))
+                | 'Use start_back interval as key ' >> WithKeys(lambda row: select_start_back_interval(row))
+                | 'Drop invalid keys  ' >> beam.Filter(lambda tuple: tuple[0] != '-1')
+                | 'group by start back interval ' >> GroupByKey()
+                | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
+                | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
+        )
         #
         # samples_tuple = (
         #         pipeline
