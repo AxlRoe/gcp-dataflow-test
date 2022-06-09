@@ -156,7 +156,7 @@ def list_blobs(bucket, path):
     return json_paths
 
 
-def run(bucket, args=None):
+def run(args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
     pipeline_options = PipelineOptions(
@@ -476,12 +476,13 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     parser = argparse.ArgumentParser()
 
-    parser.add_argument(
-        '--bucket',
-        dest='bucket',
-        required=True,
-        help='bucket where read/write csv'
-    )
+    # parser.add_argument(
+    #     '--bucket',
+    #     dest='bucket',
+    #     required=True,
+    #     help='bucket where read/write csv'
+    # )
 
     known_args, pipeline_args = parser.parse_known_args()
-    run(known_args.bucket, pipeline_args)
+    #run(known_args.bucket, pipeline_args)
+    run(pipeline_args)
