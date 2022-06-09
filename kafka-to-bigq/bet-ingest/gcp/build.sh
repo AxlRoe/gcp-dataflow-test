@@ -11,7 +11,7 @@ python pipeline_gcp.py \
 --job data-preparation \
 --bucket $BUCKET_NAME \
 --region europe-west1 \
---runner DirectRunner \
+--runner DataflowRunner \
 --project $PROJECT \
 --temp_location gs://dump-bucket-4/tmp/ \
 --experiment use_unsupported_python_version pipeline \
