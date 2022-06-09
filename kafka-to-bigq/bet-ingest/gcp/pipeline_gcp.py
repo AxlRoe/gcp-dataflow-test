@@ -46,146 +46,6 @@ def aJson(stats, sample):
         "available": round(sample["available"] * 100) / 100,
     }
 
-
-def sample_and_goal_jsons(merged_tuple):
-    data = merged_tuple[1]
-
-    try:
-        stats = data["stats"][0]
-    except:
-        print('AAAARHG')
-
-    samples = data["samples"]
-    output = []
-    for sample in samples:
-        if not stats["home"] or not stats["away"]:
-            print("missing values for stats, event: " + sample["eventId"])
-            continue
-
-        output.append(aJson(stats, sample))
-
-    return output
-
-def hms_to_min(s):
-    t = 0
-    for u in s.strftime("%H:%M").split(':'):
-        t = 60 * t + int(u)
-    return t
-
-def create_df_by_event(rows):
-    rows.insert(0, ['id', 'runner_id', 'ts', 'prediction', 'back', 'lay', 'start_lay', 'start_back', 'hgoal',
-                    'agoal', 'runner_name', 'event_name', 'event_id', 'market_name', 'available', 'matched',
-                    'total_available', 'total_matched', 'draw_perc'])
-    return pd.DataFrame(rows[1:], columns=rows[0])
-
-def current_result_is (prediction, hgoal, agoal):
-    if 'HOME' == prediction:
-        if hgoal > agoal:
-            return 'EXPECTED'
-        elif hgoal == agoal:
-            return 'DRAW'
-        else:
-            return 'WRONG'
-    elif 'AWAY' == prediction:
-        if hgoal < agoal:
-            return 'EXPECTED'
-        elif hgoal == agoal:
-            return 'DRAW'
-        else:
-            return 'WRONG'
-
-def drop_rule_out_goals(df):
-    # use 121 because step is made by 120s see https://stackoverflow.com/questions/46105315/python-pandas-finding-derivatives-from-dataframe
-    diff = df.set_index('ts').agoal.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
-    diff = diff.reset_index(drop=True)
-
-    negative_diff_indexes = diff[diff < 0]
-    for index, value in negative_diff_indexes.items():
-        real_agoals = list(df.iloc[[index]]['agoal'])[0]
-        df.iloc[index - 1, df.columns.get_loc('agoal')] = real_agoals
-
-    diff = df.set_index('ts').hgoal.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
-    diff = diff.reset_index(drop=True)
-
-    negative_diff_indexes = diff[diff < 0]
-    for index, value in negative_diff_indexes.items():
-        real_hgoals = list(df.iloc[[index]]['hgoal'])[0]
-        df.iloc[index - 1, df.columns.get_loc('hgoal')] = real_hgoals
-
-    return df
-
-def interpolate_missing_ts (df):
-    prediction = df.prediction.unique()[0]
-    runner = df.runner_name.unique()[0]
-    event_id = df.event_id.unique()[0]
-
-    df['ts'] = df.apply(lambda x: dateutil.parser.isoparse(x.ts), axis=1)
-
-    start = datetime.combine(df['ts'].min(), time.min)
-    end = start + timedelta(minutes=120)
-
-    idx = pd.date_range(start, end, freq='120S')
-    df.set_index('ts', drop=True, inplace=True)
-    df.index = pd.DatetimeIndex(df.index)
-    df = df.reindex(idx, fill_value=None)
-    df['ts'] = pd.DatetimeIndex(df.index)
-
-    df['lay'] = df.apply(lambda row: float('NaN') if row.lay < 0 else row.lay, axis=1)
-
-    df_interpol = df.resample('120S').mean()
-    df_interpol['lay'] = df_interpol['lay'].interpolate()
-    df_interpol['back'] = df_interpol['back'].interpolate()
-    #df_interpol['delta'] = df_interpol['delta'].pad()
-    df_interpol['hgoal'] = df_interpol['hgoal'].pad()
-    df_interpol['agoal'] = df_interpol['agoal'].pad()
-    df_interpol['start_back'] = df_interpol['start_back'].pad()
-    df_interpol['start_lay'] = df_interpol['start_lay'].pad()
-    df_interpol['available'] = df_interpol['available'].pad()
-    df_interpol['matched'] = df_interpol['matched'].pad()
-    df_interpol['total_matched'] = df_interpol['total_matched'].pad()
-    df_interpol['total_available'] = df_interpol['total_available'].pad()
-    df_interpol['draw_perc'] = df_interpol['draw_perc'].pad()
-
-    #df_interpol = df_interpol.assign(event_id=lambda x: event)
-    # once index is set, this assign statement create a column with the same length of the index and each row has the same value
-    df_interpol = df_interpol.assign(prediction=lambda x: prediction)
-    df_interpol = df_interpol.assign(event_id=lambda x: event_id)
-    df_interpol = df_interpol.assign(runner_name=lambda x: runner)
-    df_interpol = df_interpol.assign(lay=lambda row: round(row.lay, 2))
-
-    # dlay = df_interpol.lay.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
-    # df_interpol['dlay'] = dlay
-    df_interpol['ts'] = df['ts']
-    df_interpol['minute'] = df_interpol.apply(lambda row: hms_to_min(row.ts), axis=1)
-
-    return df_interpol
-
-def is_draw_match (df):
-
-    results = np.array(df['current_result'])
-    dict = Counter(results)
-    draw = 0 if dict['DRAW'] is None else dict['DRAW']
-    expected = 0 if dict['EXPECTED'] is None else dict['EXPECTED']
-    wrong = 0 if dict['WRONG'] is None else dict['WRONG']
-    other = expected + wrong
-    p = (draw / results.size) * 100
-    if p >= 85:
-        logging.info('skip event because it is draw at ' + str(p) + "%, draw: " + str(draw) + " other: " + str(other))
-        return True
-    else:
-        return False
-
-def assign_goal_diff_by_prediction (df):
-    df['goal_diff_by_prediction'] = df.apply(lambda row: row.hgoal - row.agoal if row.prediction == 'HOME' else row.agoal - row.hgoal, axis=1)
-    return df
-
-
-#TODO remove this column is useless
-def assign_current_result(df):
-    df['current_result'] = df.apply(lambda row: current_result_is(row.prediction, row.hgoal, row.agoal), axis=1)
-    return df
-
-
 class JsonReader(beam.PTransform):
     def expand(self, pcoll):
         return (
@@ -385,6 +245,144 @@ def run(bucket, args=None):
 
         return str(last_thr)
 
+    def sample_and_goal_jsons(merged_tuple):
+        data = merged_tuple[1]
+
+        try:
+            stats = data["stats"][0]
+        except:
+            print('AAAARHG')
+
+        samples = data["samples"]
+        output = []
+        for sample in samples:
+            if not stats["home"] or not stats["away"]:
+                print("missing values for stats, event: " + sample["eventId"])
+                continue
+
+            output.append(aJson(stats, sample))
+
+        return output
+
+    def hms_to_min(s):
+        t = 0
+        for u in s.strftime("%H:%M").split(':'):
+            t = 60 * t + int(u)
+        return t
+
+    def create_df_by_event(rows):
+        rows.insert(0, ['id', 'runner_id', 'ts', 'prediction', 'back', 'lay', 'start_lay', 'start_back', 'hgoal',
+                        'agoal', 'runner_name', 'event_name', 'event_id', 'market_name', 'available', 'matched',
+                        'total_available', 'total_matched', 'draw_perc'])
+        return pd.DataFrame(rows[1:], columns=rows[0])
+
+    def current_result_is(prediction, hgoal, agoal):
+        if 'HOME' == prediction:
+            if hgoal > agoal:
+                return 'EXPECTED'
+            elif hgoal == agoal:
+                return 'DRAW'
+            else:
+                return 'WRONG'
+        elif 'AWAY' == prediction:
+            if hgoal < agoal:
+                return 'EXPECTED'
+            elif hgoal == agoal:
+                return 'DRAW'
+            else:
+                return 'WRONG'
+
+    def drop_rule_out_goals(df):
+        # use 121 because step is made by 120s see https://stackoverflow.com/questions/46105315/python-pandas-finding-derivatives-from-dataframe
+        diff = df.set_index('ts').agoal.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
+        diff = diff.reset_index(drop=True)
+
+        negative_diff_indexes = diff[diff < 0]
+        for index, value in negative_diff_indexes.items():
+            real_agoals = list(df.iloc[[index]]['agoal'])[0]
+            df.iloc[index - 1, df.columns.get_loc('agoal')] = real_agoals
+
+        diff = df.set_index('ts').hgoal.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
+        diff = diff.reset_index(drop=True)
+
+        negative_diff_indexes = diff[diff < 0]
+        for index, value in negative_diff_indexes.items():
+            real_hgoals = list(df.iloc[[index]]['hgoal'])[0]
+            df.iloc[index - 1, df.columns.get_loc('hgoal')] = real_hgoals
+
+        return df
+
+    def interpolate_missing_ts(df):
+        prediction = df.prediction.unique()[0]
+        runner = df.runner_name.unique()[0]
+        event_id = df.event_id.unique()[0]
+
+        df['ts'] = df.apply(lambda x: dateutil.parser.isoparse(x.ts), axis=1)
+
+        start = datetime.combine(df['ts'].min(), time.min)
+        end = start + timedelta(minutes=120)
+
+        idx = pd.date_range(start, end, freq='120S')
+        df.set_index('ts', drop=True, inplace=True)
+        df.index = pd.DatetimeIndex(df.index)
+        df = df.reindex(idx, fill_value=None)
+        df['ts'] = pd.DatetimeIndex(df.index)
+
+        df['lay'] = df.apply(lambda row: float('NaN') if row.lay < 0 else row.lay, axis=1)
+
+        df_interpol = df.resample('120S').mean()
+        df_interpol['lay'] = df_interpol['lay'].interpolate()
+        df_interpol['back'] = df_interpol['back'].interpolate()
+        # df_interpol['delta'] = df_interpol['delta'].pad()
+        df_interpol['hgoal'] = df_interpol['hgoal'].pad()
+        df_interpol['agoal'] = df_interpol['agoal'].pad()
+        df_interpol['start_back'] = df_interpol['start_back'].pad()
+        df_interpol['start_lay'] = df_interpol['start_lay'].pad()
+        df_interpol['available'] = df_interpol['available'].pad()
+        df_interpol['matched'] = df_interpol['matched'].pad()
+        df_interpol['total_matched'] = df_interpol['total_matched'].pad()
+        df_interpol['total_available'] = df_interpol['total_available'].pad()
+        df_interpol['draw_perc'] = df_interpol['draw_perc'].pad()
+
+        # df_interpol = df_interpol.assign(event_id=lambda x: event)
+        # once index is set, this assign statement create a column with the same length of the index and each row has the same value
+        df_interpol = df_interpol.assign(prediction=lambda x: prediction)
+        df_interpol = df_interpol.assign(event_id=lambda x: event_id)
+        df_interpol = df_interpol.assign(runner_name=lambda x: runner)
+        df_interpol = df_interpol.assign(lay=lambda row: round(row.lay, 2))
+
+        # dlay = df_interpol.lay.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
+        # df_interpol['dlay'] = dlay
+        df_interpol['ts'] = df['ts']
+        df_interpol['minute'] = df_interpol.apply(lambda row: hms_to_min(row.ts), axis=1)
+
+        return df_interpol
+
+    def is_draw_match(df):
+
+        results = np.array(df['current_result'])
+        dict = Counter(results)
+        draw = 0 if dict['DRAW'] is None else dict['DRAW']
+        expected = 0 if dict['EXPECTED'] is None else dict['EXPECTED']
+        wrong = 0 if dict['WRONG'] is None else dict['WRONG']
+        other = expected + wrong
+        p = (draw / results.size) * 100
+        if p >= 85:
+            logging.info(
+                'skip event because it is draw at ' + str(p) + "%, draw: " + str(draw) + " other: " + str(other))
+            return True
+        else:
+            return False
+
+    def assign_goal_diff_by_prediction(df):
+        df['goal_diff_by_prediction'] = df.apply(
+            lambda row: row.hgoal - row.agoal if row.prediction == 'HOME' else row.agoal - row.hgoal, axis=1)
+        return df
+
+    # TODO remove this column is useless
+    def assign_current_result(df):
+        df['current_result'] = df.apply(lambda row: current_result_is(row.prediction, row.hgoal, row.agoal), axis=1)
+        return df
 
     start_of_day = datetime.combine(datetime.utcnow(), time.min).strftime("%Y-%m-%d")
     with beam.Pipeline(options=pipeline_options) as pipeline:
