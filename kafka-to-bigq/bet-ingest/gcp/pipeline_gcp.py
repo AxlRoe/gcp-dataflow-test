@@ -388,20 +388,20 @@ def run(bucket, args=None):
     start_of_day = datetime.combine(datetime.utcnow(), time.min).strftime("%Y-%m-%d")
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
-        # match_table_spec = bigquery.TableReference(projectId='scraper-v1', datasetId='bet', tableId='match')
-        # runner_table_spec = bigquery.TableReference(projectId='scraper-v1', datasetId='bet', tableId='runner')
-        # match_dict = (
-        #         pipeline
-        #         # Each row is a dictionary where the keys are the BigQuery columns
-        #         | 'Read match bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-3/tmp/', table=match_table_spec)
-        #         | "Convert list in row " >> ParDo(MatchRow())
-        #         | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
-        # )
+        match_table_spec = bigquery.TableReference(projectId='scraper-v1', datasetId='bet', tableId='match')
+        runner_table_spec = bigquery.TableReference(projectId='scraper-v1', datasetId='bet', tableId='runner')
+        match_dict = (
+                pipeline
+                # Each row is a dictionary where the keys are the BigQuery columns
+                | 'Read match bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-4/tmp/', table=match_table_spec)
+                | "Convert list in row " >> ParDo(MatchRow())
+                | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
+        )
         #
         # runner_dict = (
         #         pipeline
         #         # Each row is a dictionary where the keys are the BigQuery columns
-        #         | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-3/tmp/', table=runner_table_spec)
+        #         | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-4/tmp/', table=runner_table_spec)
         #         | "Parse runner row " >> beam.ParDo(RunnerRow())
         # )
         #
