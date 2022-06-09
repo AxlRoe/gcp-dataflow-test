@@ -422,61 +422,61 @@ def run(bucket, args=None):
                 | 'calculate draw percentage ' >> beam.ParDo(CalculateDrawPercentage())
         )
 
-        samples_tuple = (
-                pipeline
-                | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
-                | 'Read each sample file ' >> beam.ParDo(ReadFileContent(), bucket)
-                | "Convert sample file to json" >> ParDo(JsonParser())
-                #| "Flatten samples " >> beam.FlatMap(lambda x: x)
-                #| "map samples " >> beam.Map(lambda x: x)
-                | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
-        )
-
-        stats_tuple = (
-                pipeline
-                | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/stats'))
-                | 'Read each stats file ' >> beam.ParDo(ReadFileContent(), bucket)
-                | "Convert stats file to json" >> JsonReader()
-                | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
-        )
-
-        sample_with_score_tuples = (
-                ({'samples': samples_tuple, 'stats': stats_tuple})
-                | 'Merge back record' >> beam.CoGroupByKey()
-                | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
-                | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
-                | "add key " >> WithKeys(lambda x: x['event_id'] + '#' + x['runner_id'])
-        )
-
-        #TODO next try from here
-
-        samples_enriched_with_start_quotes = (
-                sample_with_score_tuples
-                | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
-                | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
-                | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
-        )
-
-        out_csv = 'gs://' + bucket + '/stage/data_' + start_of_day.strftime('%Y-%m-%d') + '.csv'
-        _ = (samples_enriched_with_start_quotes
-                | 'Enrich sample with home and guest ' >> beam.ParDo(EnrichWithPrediction(), beam.pvalue.AsList(match_dict))
-                | 'Enrich sample with draw percentage ' >> beam.ParDo(EnrichWithDrawPercentage(), beam.pvalue.AsList(draw_percentage_by_start_back_interval))
-                | 'Remove empty sample for missing match ' >> beam.Filter(lambda sample: bool(sample))
-                | 'add event_id as key' >> WithKeys(lambda row : row['event_id'])
-                | 'group by key' >> GroupByKey()
-                | 'get list of rows ' >> beam.Map(lambda tuple : tuple[1])
-                | 'create dataframe for an event ' >> beam.Map(lambda rows: create_df_by_event(rows))
-                | 'remove duplicated ts' >> beam.Map(lambda df: df.drop_duplicates(subset='ts', keep='first'))
-                | 'interpolate quote values for missing ts ' >> beam.Map(lambda df: interpolate_missing_ts(df))
-                | 'drop rule out goals ' >> beam.Map(lambda df: drop_rule_out_goals(df))
-                | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
-                | 'add current_result column' >> beam.Map(lambda df: assign_current_result(df))
-                | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
-                | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
-                | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
-                | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
-                | 'write to csv ' >> beam.Map(lambda df: df.to_csv(out_csv, sep=';', index=False, encoding="utf-8", line_terminator='\n'))
-            )
+        # samples_tuple = (
+        #         pipeline
+        #         | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
+        #         | 'Read each sample file ' >> beam.ParDo(ReadFileContent(), bucket)
+        #         | "Convert sample file to json" >> ParDo(JsonParser())
+        #         #| "Flatten samples " >> beam.FlatMap(lambda x: x)
+        #         #| "map samples " >> beam.Map(lambda x: x)
+        #         | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+        # )
+        #
+        # stats_tuple = (
+        #         pipeline
+        #         | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/stats'))
+        #         | 'Read each stats file ' >> beam.ParDo(ReadFileContent(), bucket)
+        #         | "Convert stats file to json" >> JsonReader()
+        #         | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+        # )
+        #
+        # sample_with_score_tuples = (
+        #         ({'samples': samples_tuple, 'stats': stats_tuple})
+        #         | 'Merge back record' >> beam.CoGroupByKey()
+        #         | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
+        #         | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
+        #         | "add key " >> WithKeys(lambda x: x['event_id'] + '#' + x['runner_id'])
+        # )
+        #
+        # #TODO next try from here
+        #
+        # samples_enriched_with_start_quotes = (
+        #         sample_with_score_tuples
+        #         | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
+        #         | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
+        #         | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
+        # )
+        #
+        # out_csv = 'gs://' + bucket + '/stage/data_' + start_of_day.strftime('%Y-%m-%d') + '.csv'
+        # _ = (samples_enriched_with_start_quotes
+        #         | 'Enrich sample with home and guest ' >> beam.ParDo(EnrichWithPrediction(), beam.pvalue.AsList(match_dict))
+        #         | 'Enrich sample with draw percentage ' >> beam.ParDo(EnrichWithDrawPercentage(), beam.pvalue.AsList(draw_percentage_by_start_back_interval))
+        #         | 'Remove empty sample for missing match ' >> beam.Filter(lambda sample: bool(sample))
+        #         | 'add event_id as key' >> WithKeys(lambda row : row['event_id'])
+        #         | 'group by key' >> GroupByKey()
+        #         | 'get list of rows ' >> beam.Map(lambda tuple : tuple[1])
+        #         | 'create dataframe for an event ' >> beam.Map(lambda rows: create_df_by_event(rows))
+        #         | 'remove duplicated ts' >> beam.Map(lambda df: df.drop_duplicates(subset='ts', keep='first'))
+        #         | 'interpolate quote values for missing ts ' >> beam.Map(lambda df: interpolate_missing_ts(df))
+        #         | 'drop rule out goals ' >> beam.Map(lambda df: drop_rule_out_goals(df))
+        #         | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
+        #         | 'add current_result column' >> beam.Map(lambda df: assign_current_result(df))
+        #         | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
+        #         | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
+        #         | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
+        #         | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
+        #         | 'write to csv ' >> beam.Map(lambda df: df.to_csv(out_csv, sep=';', index=False, encoding="utf-8", line_terminator='\n'))
+        #     )
 
     logging.info("pipeline started")
 
