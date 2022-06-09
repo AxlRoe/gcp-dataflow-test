@@ -326,6 +326,28 @@ class GetQuoteAndScore(DoFn):
         record['score'] = match['score']
         return record
 
+class SelectQuoteInterval(DoFn):
+    def process(self, record):
+
+        if not record:
+            return str('-1')
+
+        # extreme values
+        min = 3.0
+        max = 10.0
+
+        if record['start_back'] < min:
+            return str(0) + '-' + str(min)
+
+        if record['start_back'] > max:
+            return str(max) + '-' + str(record['start_back'])
+
+        last_thr = -1
+        for thr in np.arange(int(min), int(max), 0.50):
+            if record['start_back'] >= thr and record['start_back'] < thr + 0.5:
+                return str(thr) + '-' + str(thr + 0.5)
+            last_thr = thr
+
 
 def merge_df(dfs):
     if not dfs:
@@ -334,40 +356,16 @@ def merge_df(dfs):
 
     return pd.concat(dfs).reset_index(drop=True)
 
-
-
-def select_start_back_interval(row):
-
-    if not row:
-        return str('-1')
-
-    #extreme values
-    min = 3.0
-    max = 10.0
-
-    if row['start_back'] < min:
-        return str(0) + '-' + str(min)
-
-    if row['start_back'] > max:
-        return str(max) + '-' + str(row['start_back'])
-
-    last_thr = -1
-    for thr in np.arange(int(min), int(max), 0.50):
-        if row['start_back'] >= thr and row['start_back'] < thr + 0.5:
-            return str(thr) + '-' + str(thr+0.5)
-        last_thr = thr
-
-    return str(last_thr)
-
-def calculate_draw_percentage(tuple):
-    df = tuple[1]
-    draw_match_num = df[(df['score'] == 'DRAW')].shape[0]
-    total = df.shape[0]
-    return {
-        'start': tuple[0].split('-')[0],
-        'end': tuple[0].split('-')[-1],
-        'perc': round((draw_match_num / total) * 100) / 100
-    }
+class CalculateDrawPercentage(DoFn):
+    def process(self, tuple):
+        df = tuple[1]
+        draw_match_num = df[(df['score'] == 'DRAW')].shape[0]
+        total = df.shape[0]
+        return {
+            'start': tuple[0].split('-')[0],
+            'end': tuple[0].split('-')[-1],
+            'perc': round((draw_match_num / total) * 100) / 100
+        }
 
 def list_blobs(bucket, path):
     """Lists all the blobs in the bucket."""
@@ -415,30 +413,28 @@ def run(bucket, args=None):
                 ({'matches': match_dict_with_key, 'runners': runner_dict_with_key})
                 | 'Join match and runners' >> beam.CoGroupByKey()
                 | 'get start back and score' >> beam.ParDo(GetQuoteAndScore())
-                | 'Use start_back interval as key ' >> WithKeys(lambda row: select_start_back_interval(row))
+                | 'Use start_back interval as key ' >> WithKeys(SelectQuoteInterval())
                 | 'Drop invalid keys  ' >> beam.Filter(lambda tuple: tuple[0] != '-1')
                 | 'group by start back interval ' >> GroupByKey()
                 | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
-                | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
+                | 'calculate draw percentage ' >> beam.ParDo(CalculateDrawPercentage())
         )
 
         # samples_tuple = (
         #         pipeline
         #         | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
-        #         | 'Read each file content' >> beam.ParDo(ReadFileContent(), bucket)
+        #         | 'Read each sample file ' >> beam.ParDo(ReadFileContent(), bucket)
         #         | "Convert sample file to json" >> ParDo(JsonParser())
         #         #| "Flatten samples " >> beam.FlatMap(lambda x: x)
         #         #| "map samples " >> beam.Map(lambda x: x)
         #         | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         # )
-
+        #
         # stats_tuple = (
         #         pipeline
-        #         | "Matching stats" >> fileio.MatchFiles('gs://' + bucket + '/' + start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/dump/stats/*.json')
-        #         | "Reading stats " >> fileio.ReadMatches()
+        #         | 'Create' >> beam.Create(list_blobs(bucket, start_of_day + '/stats'))
+        #         | 'Read each stats file ' >> beam.ParDo(ReadFileContent(), bucket)
         #         | "Convert stats file to json" >> JsonReader()
-        #         | "Flatten stats " >> beam.FlatMap(lambda x: x)
-        #         | "map stats " >> beam.Map(lambda x: x)
         #         | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         # )
         #
@@ -449,7 +445,8 @@ def run(bucket, args=None):
         #         | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
         #         | "add key " >> WithKeys(lambda x: x['event_id'] + '#' + x['runner_id'])
         # )
-        #
+
+        #TODO next try from here
         # samples_enriched_with_start_quotes = (
         #         sample_with_score_tuples
         #         | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
