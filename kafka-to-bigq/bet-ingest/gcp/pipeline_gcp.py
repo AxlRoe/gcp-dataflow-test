@@ -300,14 +300,15 @@ class EnrichWithDrawPercentage (DoFn):
 
 class ReadFileContent(beam.DoFn):
 
-    def setup(self):
-        # Called whenever the DoFn instance is deserialized on the worker.
-        # This means it can be called more than once per worker because multiple instances of a given DoFn subclass may be created (e.g., due to parallelization, or due to garbage collection after a period of disuse).
-        # This is a good place to connect to database instances, open network connections or other resources.
-        self.storage_client = storage.Client()
+    # def setup(self):
+    #     # Called whenever the DoFn instance is deserialized on the worker.
+    #     # This means it can be called more than once per worker because multiple instances of a given DoFn subclass may be created (e.g., due to parallelization, or due to garbage collection after a period of disuse).
+    #     # This is a good place to connect to database instances, open network connections or other resources.
+    #     self.storage_client = storage.Client()
 
     def process(self, file_name, bucket):
-        bucket = self.storage_client.get_bucket(bucket)
+        storage_client = storage.Client()
+        bucket = storage_client.get_bucket(bucket)
         blob = bucket.get_blob(file_name)
         yield blob.download_as_string()
 
@@ -367,9 +368,9 @@ def calculate_draw_percentage(tuple):
 
 def list_blobs(bucket, path):
     """Lists all the blobs in the bucket."""
-    start_of_day = datetime.combine(datetime.utcnow(), time.min)
+    start_of_day = datetime.combine(datetime.utcnow(), time.min).strftime("%Y-%m-%d")
     storage_client = storage.Client()
-    blobs = storage_client.list_blobs(bucket, prefix=start_of_day.strftime('%Y-%m-%dT%H:%M:%S.000Z') + '/' + path)
+    blobs = storage_client.list_blobs(bucket, prefix=start_of_day + '/' + path)
     json_paths = []
     for blob in blobs:
         #json_paths.append(f"gs://{bucket_name}/{blob.name}")
