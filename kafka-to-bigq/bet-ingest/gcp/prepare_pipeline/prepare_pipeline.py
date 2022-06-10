@@ -448,27 +448,27 @@ def run(args=None):
                 | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
                 | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
         )
-        #
-        # out_csv = 'gs://' + bucket + '/stage/data_' + start_of_day.strftime('%Y-%m-%d') + '.csv'
-        # _ = (samples_enriched_with_start_quotes
-        #         | 'Enrich sample with home and guest ' >> beam.ParDo(EnrichWithPrediction(), beam.pvalue.AsList(match_dict))
-        #         | 'Enrich sample with draw percentage ' >> beam.ParDo(EnrichWithDrawPercentage(), beam.pvalue.AsList(draw_percentage_by_start_back_interval))
-        #         | 'Remove empty sample for missing match ' >> beam.Filter(lambda sample: bool(sample))
-        #         | 'add event_id as key' >> WithKeys(lambda row : row['event_id'])
-        #         | 'group by key' >> GroupByKey()
-        #         | 'get list of rows ' >> beam.Map(lambda tuple : tuple[1])
-        #         | 'create dataframe for an event ' >> beam.Map(lambda rows: create_df_by_event(rows))
-        #         | 'remove duplicated ts' >> beam.Map(lambda df: df.drop_duplicates(subset='ts', keep='first'))
-        #         | 'interpolate quote values for missing ts ' >> beam.Map(lambda df: interpolate_missing_ts(df))
-        #         | 'drop rule out goals ' >> beam.Map(lambda df: drop_rule_out_goals(df))
-        #         | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
-        #         | 'add current_result column' >> beam.Map(lambda df: assign_current_result(df))
-        #         | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
-        #         | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
-        #         | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
-        #         | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
-        #         | 'write to csv ' >> beam.Map(lambda df: df.to_csv(out_csv, sep=';', index=False, encoding="utf-8", line_terminator='\n'))
-        #     )
+
+        out_csv = 'gs://' + bucket + '/stage/data_' + start_of_day.strftime('%Y-%m-%d') + '.csv'
+        _ = (samples_enriched_with_start_quotes
+                | 'Enrich sample with home and guest ' >> beam.ParDo(EnrichWithPrediction(), beam.pvalue.AsList(match_dict))
+                | 'Enrich sample with draw percentage ' >> beam.ParDo(EnrichWithDrawPercentage(), beam.pvalue.AsList(draw_percentage_by_start_back_interval))
+                | 'Remove empty sample for missing match ' >> beam.Filter(lambda sample: bool(sample))
+                | 'add event_id as key' >> WithKeys(lambda row : row['event_id'])
+                | 'group by key' >> GroupByKey()
+                | 'get list of rows ' >> beam.Map(lambda tuple : tuple[1])
+                | 'create dataframe for an event ' >> beam.Map(lambda rows: create_df_by_event(rows))
+                | 'remove duplicated ts' >> beam.Map(lambda df: df.drop_duplicates(subset='ts', keep='first'))
+                | 'interpolate quote values for missing ts ' >> beam.Map(lambda df: interpolate_missing_ts(df))
+                | 'drop rule out goals ' >> beam.Map(lambda df: drop_rule_out_goals(df))
+                | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
+                | 'add current_result column' >> beam.Map(lambda df: assign_current_result(df))
+                | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
+                | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
+                | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
+                | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
+                | 'write to csv ' >> beam.Map(lambda df: df.to_csv(out_csv, sep=';', index=False, encoding="utf-8", line_terminator='\n'))
+            )
 
     logging.info("pipeline started")
 
