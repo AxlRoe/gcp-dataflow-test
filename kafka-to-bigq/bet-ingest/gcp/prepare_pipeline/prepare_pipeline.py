@@ -382,6 +382,7 @@ def run(args=None):
         return pd.concat(dfs).reset_index(drop=True)
 
     start_of_day = datetime.combine(datetime.utcnow(), time.min).strftime("%Y-%m-%d")
+    bucket = 'dump-bucket-4'
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
         match_table_spec = bigquery.TableReference(projectId='scraper-v1-351921', datasetId='bet', tableId='match')
@@ -389,7 +390,7 @@ def run(args=None):
         match_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | 'Read match bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-4/tmp/', table=match_table_spec)
+                | 'Read match bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://' + bucket + '/tmp/', table=match_table_spec)
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
         )
@@ -397,7 +398,7 @@ def run(args=None):
         runner_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://dump-bucket-4/tmp/', table=runner_table_spec)
+                | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://' + bucket + '/tmp/', table=runner_table_spec)
                 | "Parse runner row " >> beam.ParDo(RunnerRow())
         )
 
