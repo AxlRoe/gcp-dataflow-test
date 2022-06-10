@@ -426,21 +426,21 @@ def run(args=None):
                 | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
 
-        # stats_tuple = (
-        #         pipeline
-        #         | 'Create stats pcoll' >> beam.Create(list_blobs(bucket, start_of_day + '/stats'))
-        #         | 'Read each stats file ' >> beam.ParDo(ReadFileContent(), bucket)
-        #         | "Convert stats file to json" >> JsonReader()
-        #         | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
-        # )
-        #
-        # sample_with_score_tuples = (
-        #         ({'samples': samples_tuple, 'stats': stats_tuple})
-        #         | 'Merge back record' >> beam.CoGroupByKey()
-        #         | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
-        #         | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
-        #         | "add key " >> WithKeys(lambda x: x['event_id'] + '#' + x['runner_id'])
-        # )
+        stats_tuple = (
+                pipeline
+                | 'Create stats pcoll' >> beam.Create(list_blobs(bucket, start_of_day + '/stats'))
+                | 'Read each stats file ' >> beam.ParDo(ReadFileContent(), bucket)
+                | "Convert stats file to json" >> JsonReader()
+                | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+        )
+
+        sample_with_score_tuples = (
+                ({'samples': samples_tuple, 'stats': stats_tuple})
+                | 'Merge back record' >> beam.CoGroupByKey()
+                | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
+                | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
+                | "add key " >> WithKeys(lambda x: x['event_id'] + '#' + x['runner_id'])
+        )
         #
         # samples_enriched_with_start_quotes = (
         #         sample_with_score_tuples
