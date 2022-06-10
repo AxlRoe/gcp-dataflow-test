@@ -414,17 +414,17 @@ def run(args=None):
                 | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
                 | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
         )
-        #
-        # samples_tuple = (
-        #         pipeline
-        #         | 'Create sample pcoll' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
-        #         | 'Read each sample file ' >> beam.ParDo(ReadFileContent(), bucket)
-        #         | "Convert sample file to json" >> ParDo(JsonParser())
-        #         #| "Flatten samples " >> beam.FlatMap(lambda x: x)
-        #         #| "map samples " >> beam.Map(lambda x: x)
-        #         | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
-        # )
-        #
+
+        samples_tuple = (
+                pipeline
+                | 'Create sample pcoll' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
+                | 'Read each sample file ' >> beam.ParDo(ReadFileContent(), bucket)
+                | "Convert sample file to json" >> ParDo(JsonParser())
+                #| "Flatten samples " >> beam.FlatMap(lambda x: x)
+                #| "map samples " >> beam.Map(lambda x: x)
+                | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+        )
+
         # stats_tuple = (
         #         pipeline
         #         | 'Create stats pcoll' >> beam.Create(list_blobs(bucket, start_of_day + '/stats'))
