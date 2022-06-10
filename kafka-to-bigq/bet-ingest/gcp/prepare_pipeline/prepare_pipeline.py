@@ -441,13 +441,13 @@ def run(args=None):
                 | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
                 | "add key " >> WithKeys(lambda x: x['event_id'] + '#' + x['runner_id'])
         )
-        #
-        # samples_enriched_with_start_quotes = (
-        #         sample_with_score_tuples
-        #         | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
-        #         | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
-        #         | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
-        # )
+
+        samples_enriched_with_start_quotes = (
+                sample_with_score_tuples
+                | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
+                | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
+                | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
+        )
         #
         # out_csv = 'gs://' + bucket + '/stage/data_' + start_of_day.strftime('%Y-%m-%d') + '.csv'
         # _ = (samples_enriched_with_start_quotes
