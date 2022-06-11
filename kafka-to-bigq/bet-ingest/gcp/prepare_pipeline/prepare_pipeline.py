@@ -388,7 +388,8 @@ def run(args=None):
 
         return pd.concat(dfs).reset_index(drop=True)
 
-    start_of_day = datetime.combine(datetime.utcnow(), time.min).strftime("%Y-%m-%d")
+    #start_of_day = datetime.combine(datetime.utcnow(), time.min).strftime("%Y-%m-%d")
+    start_of_day = '2022-06-08'
     bucket = 'dump-bucket-4'
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
@@ -456,7 +457,6 @@ def run(args=None):
                 | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
         )
 
-        out_csv = 'gs://' + bucket + '/stage/data_' + start_of_day + '.csv'
         _ = (samples_enriched_with_start_quotes
                 | 'Enrich sample with home and guest ' >> beam.ParDo(EnrichWithPrediction(), beam.pvalue.AsList(match_dict))
                 | 'Enrich sample with draw percentage ' >> beam.ParDo(EnrichWithDrawPercentage(), beam.pvalue.AsList(draw_percentage_by_start_back_interval))
