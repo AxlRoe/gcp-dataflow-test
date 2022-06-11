@@ -14,7 +14,7 @@ import dateutil
 import numpy as np
 import pandas as pd
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
-from apache_beam.io import fileio
+from apache_beam.io import fileio, WriteToText
 from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
 from google.cloud import storage
@@ -143,6 +143,13 @@ class ReadFileContent(DoFn):
         bucket = storage_client.get_bucket(bucket)
         blob = bucket.get_blob(file_name)
         yield blob.download_as_string()
+
+class WriteToCsv(DoFn):
+    def process(self, df):
+        columns = df.columns.values.tolist()
+        records = df.values.tolist()
+        records.insert(0, columns)
+        yield records
 
 def list_blobs(bucket, path):
     """Lists all the blobs in the bucket."""
@@ -467,7 +474,10 @@ def run(args=None):
                 | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
                 | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
                 | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
-                | 'write to csv ' >> beam.Map(lambda df: df.to_csv(out_csv, sep=';', index=False, encoding="utf-8", line_terminator='\n'))
+                | 'as list of lists ' >> beam.ParDo(WriteToCsv())
+                | 'write to csv ' >> WriteToText('gs://' + bucket + '/data_' + start_of_day + '.csv')
+                #| 'write to csv ' >> beam.Map(lambda df: df.to_csv('data_' + start_of_day + '.csv', sep=';', index=False, encoding="utf-8", line_terminator='\n'))
+
             )
 
     logging.info("pipeline started")
