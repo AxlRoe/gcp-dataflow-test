@@ -18,7 +18,6 @@ from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.io import fileio, WriteToText, ReadFromText
 from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
-from google.cloud import storage
 
 class JsonParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
