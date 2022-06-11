@@ -120,20 +120,6 @@ class EnrichWithDrawPercentage (DoFn):
         row_dict['draw_perc'] = score_dict['perc']
         yield row_dict
 
-class ReadFileContent(DoFn):
-
-    # def setup(self):
-    #     # Called whenever the DoFn instance is deserialized on the worker.
-    #     # This means it can be called more than once per worker because multiple instances of a given DoFn subclass may be created (e.g., due to parallelization, or due to garbage collection after a period of disuse).
-    #     # This is a good place to connect to database instances, open network connections or other resources.
-    #     self.storage_client = storage.Client()
-
-    def process(self, file_name, bucket):
-        storage_client = storage.Client()
-        bucket = storage_client.get_bucket(bucket)
-        blob = bucket.get_blob(file_name)
-        yield blob.download_as_string()
-
 class WriteToCsv(DoFn):
     def process(self, df):
         columns = df.columns.values.tolist()
