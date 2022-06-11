@@ -11,21 +11,14 @@ from datetime import datetime, time, timedelta
 
 import apache_beam as beam
 import dateutil
+import jsonpickle
 import numpy as np
 import pandas as pd
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
-from apache_beam.io import fileio, WriteToText
+from apache_beam.io import fileio, WriteToText, ReadFromText
 from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
 from google.cloud import storage
-
-class JsonReader(beam.PTransform):
-    def expand(self, pcoll):
-        return (
-                pcoll
-                # Bind window info to each element using element timestamp (or publish time).
-                | "Read json from storage" >> ParDo(JsonParser())
-        )
 
 class JsonParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
@@ -37,20 +30,18 @@ class JsonParser(DoFn):
             logging.info("File read is null")
             yield json.loads('{}')
 
-        data = file.decode('utf-8')
-        if not data:
-            logging.info("Json read is null")
-            yield json.loads('{}')
-
         try:
-            sample = json.loads(data)
+            sample = jsonpickle.decode(file)
+            if not sample:
+                logging.info("Json read is null")
+                yield json.loads('{}')
+
+            logging.info("Parsed json ")
+            yield sample
+
         except BaseException as err:
             print(f"Unexpected {err=}, {type(err)=}")
             raise
-
-
-        logging.info("Parsed json ")
-        yield sample
 
 class MatchRow (DoFn):
     def process(self, element):
@@ -150,17 +141,6 @@ class WriteToCsv(DoFn):
         records = df.values.tolist()
         records.insert(0, columns)
         yield records
-
-def list_blobs(bucket, path):
-    """Lists all the blobs in the bucket."""
-    start_of_day = datetime.combine(datetime.utcnow(), time.min).strftime("%Y-%m-%d")
-    storage_client = storage.Client()
-    blobs = storage_client.list_blobs(bucket, prefix=start_of_day + '/' + path)
-    json_paths = []
-    for blob in blobs:
-        #json_paths.append(f"gs://{bucket_name}/{blob.name}")
-        json_paths.append(f"{blob.name}")
-    return json_paths
 
 
 def run(args=None):
@@ -401,6 +381,7 @@ def run(args=None):
                 | 'Read match bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://' + bucket + '/tmp/', table=match_table_spec)
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
+                #| "debug match " >> beam.Map(print)
         )
 
         runner_dict = (
@@ -408,6 +389,7 @@ def run(args=None):
                 # Each row is a dictionary where the keys are the BigQuery columns
                 | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://' + bucket + '/tmp/', table=runner_table_spec)
                 | "Parse runner row " >> beam.ParDo(RunnerRow())
+                #| 'debug runner ' >> beam.Map(print)
         )
 
         match_dict_with_key = (match_dict | "add key for match" >> WithKeys(lambda x: x['event_id']))
@@ -422,23 +404,20 @@ def run(args=None):
                 | 'group by start back interval ' >> GroupByKey()
                 | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
                 | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
+                #| 'debug join runner & match ' >> beam.Map(print)
         )
 
         samples_tuple = (
                 pipeline
-                | 'Create sample pcoll' >> beam.Create(list_blobs(bucket, start_of_day + '/live'))
-                | 'Read each sample file ' >> beam.ParDo(ReadFileContent(), bucket)
+                | 'Create sample pcoll' >> ReadFromText('gs://' + bucket + '/' + start_of_day + '/live/*.json')
                 | "Convert sample file to json" >> ParDo(JsonParser())
-                #| "Flatten samples " >> beam.FlatMap(lambda x: x)
-                #| "map samples " >> beam.Map(lambda x: x)
                 | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
 
         stats_tuple = (
                 pipeline
-                | 'Create stats pcoll' >> beam.Create(list_blobs(bucket, start_of_day + '/stats'))
-                | 'Read each stats file ' >> beam.ParDo(ReadFileContent(), bucket)
-                | "Convert stats file to json" >> JsonReader()
+                | 'Create stats pcoll' >> ReadFromText('gs://' + bucket + '/' + start_of_day + '/stats/*.json')
+                | "Convert stats file to json" >> ParDo(JsonParser())
                 | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
 
