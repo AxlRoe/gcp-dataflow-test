@@ -35,7 +35,7 @@ class JsonParser(DoFn):
                 logging.info("Json read is null")
                 yield json.loads('{}')
 
-            logging.info("Parsed json ")
+            #logging.info("Parsed json ")
             yield sample
 
         except BaseException as err:
@@ -389,7 +389,7 @@ def run(args=None):
                 | 'group by start back interval ' >> GroupByKey()
                 | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
                 | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
-                | 'debug join runner & match ' >> beam.Map(print)
+                #| 'debug join runner & match ' >> beam.Map(print)
         )
 
         samples_tuple = (
@@ -419,7 +419,6 @@ def run(args=None):
                 | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
                 | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
                 | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
-                | 'debug enriched sample ' >> beam.Map(print)
         )
 
         _ = (samples_enriched_with_start_quotes
