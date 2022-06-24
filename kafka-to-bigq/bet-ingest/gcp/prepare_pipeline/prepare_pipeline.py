@@ -10,14 +10,14 @@ from collections import Counter
 from datetime import datetime, time, timedelta
 
 import apache_beam as beam
-import dateutil
 import jsonpickle
 import numpy as np
 import pandas as pd
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
-from apache_beam.io import fileio, WriteToText, ReadFromText
+from apache_beam.io import WriteToText, ReadFromText
 from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
+
 
 class JsonParser(DoFn):
     def process(self, file, publish_time=DoFn.TimestampParam):
@@ -30,13 +30,13 @@ class JsonParser(DoFn):
             yield json.loads('{}')
 
         try:
-            sample = jsonpickle.decode(file)
-            if not sample:
+            samples = jsonpickle.decode(file)
+            if not samples:
                 logging.info("Json read is null")
                 yield json.loads('{}')
 
             #logging.info("Parsed json ")
-            yield sample
+            yield samples
 
         except BaseException as err:
             print(f"Unexpected {err=}, {type(err)=}")
@@ -120,14 +120,6 @@ class EnrichWithDrawPercentage (DoFn):
         row_dict['draw_perc'] = score_dict['perc']
         yield row_dict
 
-class WriteToCsv(DoFn):
-    def process(self, df):
-        columns = df.columns.values.tolist()
-        records = df.values.tolist()
-        records.insert(0, columns)
-        yield records
-
-
 def run(args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
@@ -137,10 +129,8 @@ def run(args=None):
 
     def aJson(stats, sample):
         return {
-            "id": sample["exchangeId"],
-            "runner_id": str(sample["runnerId"]),
-            "ts": sample["ts"],
-            # "delta": float("NaN"),
+            "event_id": sample["eventId"],
+            "minute" : int(sample["minute"]),
             "prediction": None,
             "back": round(sample["back"] * 100) / 100,
             "lay": round(sample["lay"] * 100) / 100,
@@ -150,11 +140,6 @@ def run(args=None):
             "hgoal": stats["home"]["goals"],
             "guest": sample["guest"],
             "agoal": stats["away"]["goals"],
-            "runner_name": sample["runnerName"],
-            "event_name": sample["eventName"],
-            "event_id": sample["eventId"],
-            "market_name": sample["marketName"],
-            "market_id": sample["marketId"],
             "total_available": round(sample["totalAvailable"] * 100) / 100,
             "total_matched": round(sample["totalMatched"] * 100) / 100,
             "matched": round(sample["matched"] * 100) / 100,
@@ -226,17 +211,10 @@ def run(args=None):
 
         return output
 
-    def hms_to_min(s):
-        t = 0
-        for u in s.strftime("%H:%M").split(':'):
-            t = 60 * t + int(u)
-        return t
-
     def create_df_by_event(rows):
-        rows.insert(0, ['id', 'runner_id', 'ts', 'prediction', 'back', 'lay', 'start_lay', 'start_back', 'hgoal',
-                        'agoal', 'runner_name', 'event_name', 'event_id', 'market_name', 'available', 'matched',
-                        'total_available', 'total_matched', 'draw_perc'])
-        return pd.DataFrame(rows[1:], columns=rows[0])
+        rows.insert(0, ['event_id','minute','prediction','back','lay','start_lay','start_back','hgoal','agoal','available','matched','total_available','total_matched','draw_perc'])
+        df = pd.DataFrame(rows[1:], columns=rows[0])
+        return df.drop(columns=['event_id'])
 
     def current_result_is(prediction, hgoal, agoal):
         if 'HOME' == prediction:
@@ -255,70 +233,58 @@ def run(args=None):
                 return 'WRONG'
 
     def drop_rule_out_goals(df):
-        # use 121 because step is made by 120s see https://stackoverflow.com/questions/46105315/python-pandas-finding-derivatives-from-dataframe
-        diff = df.set_index('ts').agoal.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
-        diff = diff.reset_index(drop=True)
+        df = df.sort_values('minute')
+        def assign_real_goal_value(df, goal_col, goal_diff):
+            df[goal_diff] = df[goal_col].diff()
 
-        negative_diff_indexes = diff[diff < 0]
-        for index, value in negative_diff_indexes.items():
-            real_agoals = list(df.iloc[[index]]['agoal'])[0]
-            df.iloc[index - 1, df.columns.get_loc('agoal')] = real_agoals
+            tmp_df = df[df[goal_diff] > 0]
+            if not tmp_df.empty:
+                goal_minutes = list(tmp_df['minute'])
 
-        diff = df.set_index('ts').hgoal.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
-        diff = diff.reset_index(drop=True)
+            tmp_df = df[df[goal_diff] < 0]
+            rule_out_goal_minutes = []
+            if not tmp_df.empty:
+                rule_out_goal_minutes = list(tmp_df['minute'])
 
-        negative_diff_indexes = diff[diff < 0]
-        for index, value in negative_diff_indexes.items():
-            real_hgoals = list(df.iloc[[index]]['hgoal'])[0]
-            df.iloc[index - 1, df.columns.get_loc('hgoal')] = real_hgoals
+            if not rule_out_goal_minutes:
+                return df
+
+            df = df.set_index('minute')
+            for rg_min in rule_out_goal_minutes:
+                start_rg_min = list(filter(lambda minute: minute < rg_min, goal_minutes))[0]
+                real_agoals = df.loc[rg_min][goal_col]
+                df.loc[list(range(start_rg_min, rg_min, 2)), goal_col] = real_agoals
+
+            df = df.reset_index()
+            df = df.drop(columns=[goal_diff])
+            return df
+
+        df = assign_real_goal_value(df, 'agoal', 'ag_diff')
+        df = assign_real_goal_value(df, 'hgoal', 'hg_diff')
 
         return df
 
     def interpolate_missing_ts(df):
-        prediction = df.prediction.unique()[0]
-        runner = df.runner_name.unique()[0]
-        event_id = df.event_id.unique()[0]
 
-        df['ts'] = df.apply(lambda x: dateutil.parser.isoparse(x.ts), axis=1)
+        idx = list(range(0, 120+2, 2))
+        tmp_df = df.set_index('minute').reindex(idx).reset_index()
 
-        start = datetime.combine(df['ts'].min(), time.min)
-        end = start + timedelta(minutes=120)
+        tmp_df['lay'] = tmp_df.apply(lambda row: float('NaN') if row.lay < 0 else row.lay, axis=1)
 
-        idx = pd.date_range(start, end, freq='120S')
-        df.set_index('ts', drop=True, inplace=True)
-        df.index = pd.DatetimeIndex(df.index)
-        df = df.reindex(idx, fill_value=None)
-        df['ts'] = pd.DatetimeIndex(df.index)
+        tmp_df['lay'] = tmp_df['lay'].pad()
+        tmp_df['back'] = tmp_df['back'].pad()
+        tmp_df['hgoal'] = tmp_df['hgoal'].pad()
+        tmp_df['agoal'] = tmp_df['agoal'].pad()
+        tmp_df['start_back'] = tmp_df['start_back'].pad()
+        tmp_df['start_lay'] = tmp_df['start_lay'].pad()
+        tmp_df['available'] = tmp_df['available'].pad()
+        tmp_df['matched'] = tmp_df['matched'].pad()
+        tmp_df['total_matched'] = tmp_df['total_matched'].pad()
+        tmp_df['total_available'] = tmp_df['total_available'].pad()
+        tmp_df['draw_perc'] = tmp_df['draw_perc'].pad()
+        tmp_df['prediction'] = tmp_df['prediction'].pad()
 
-        df['lay'] = df.apply(lambda row: float('NaN') if row.lay < 0 else row.lay, axis=1)
-
-        df_interpol = df.resample('120S').mean()
-        df_interpol['lay'] = df_interpol['lay'].interpolate()
-        df_interpol['back'] = df_interpol['back'].interpolate()
-        # df_interpol['delta'] = df_interpol['delta'].pad()
-        df_interpol['hgoal'] = df_interpol['hgoal'].pad()
-        df_interpol['agoal'] = df_interpol['agoal'].pad()
-        df_interpol['start_back'] = df_interpol['start_back'].pad()
-        df_interpol['start_lay'] = df_interpol['start_lay'].pad()
-        df_interpol['available'] = df_interpol['available'].pad()
-        df_interpol['matched'] = df_interpol['matched'].pad()
-        df_interpol['total_matched'] = df_interpol['total_matched'].pad()
-        df_interpol['total_available'] = df_interpol['total_available'].pad()
-        df_interpol['draw_perc'] = df_interpol['draw_perc'].pad()
-
-        # df_interpol = df_interpol.assign(event_id=lambda x: event)
-        # once index is set, this assign statement create a column with the same length of the index and each row has the same value
-        df_interpol = df_interpol.assign(prediction=lambda x: prediction)
-        df_interpol = df_interpol.assign(event_id=lambda x: event_id)
-        df_interpol = df_interpol.assign(runner_name=lambda x: runner)
-        df_interpol = df_interpol.assign(lay=lambda row: round(row.lay, 2))
-
-        # dlay = df_interpol.lay.rolling('121s').apply(lambda x: x[-1] - x[0]) / 2
-        # df_interpol['dlay'] = dlay
-        df_interpol['ts'] = df['ts']
-        df_interpol['minute'] = df_interpol.apply(lambda row: hms_to_min(row.ts), axis=1)
-
-        return df_interpol
+        return tmp_df
 
     def is_draw_match(df):
 
@@ -353,8 +319,8 @@ def run(args=None):
 
         return pd.concat(dfs).reset_index(drop=True)
 
-    #start_of_day = datetime.combine(datetime.utcnow(), time.min).strftime("%Y-%m-%d")
-    start_of_day = '2022-06-08'
+    start_of_day = datetime.combine(datetime.utcnow(), time.min) - timedelta(1)
+    start_of_day = '2022-06-13' # = start_of_day.strftime("%Y-%m-%d")
     bucket = 'dump-bucket-4'
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
@@ -395,14 +361,16 @@ def run(args=None):
         samples_tuple = (
                 pipeline
                 | 'Create sample pcoll' >> ReadFromText('gs://' + bucket + '/' + start_of_day + '/live/*.json')
-                | "Convert sample file to json" >> ParDo(JsonParser())
-                | "Add key to samples " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+                | 'Convert sample file to json' >> ParDo(JsonParser())
+                | 'flatten samples ' >> beam.FlatMap(lambda x: x)
+                | 'Add key to samples ' >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
-
+        #TODO add minute in score json
         stats_tuple = (
                 pipeline
                 | 'Create stats pcoll' >> ReadFromText('gs://' + bucket + '/' + start_of_day + '/stats/*.json')
                 | "Convert stats file to json" >> ParDo(JsonParser())
+                | 'flatten scores ' >> beam.FlatMap(lambda x: x)
                 | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
         )
 
@@ -429,7 +397,8 @@ def run(args=None):
                 | 'group by key' >> GroupByKey()
                 | 'get list of rows ' >> beam.Map(lambda tuple : tuple[1])
                 | 'create dataframe for an event ' >> beam.Map(lambda rows: create_df_by_event(rows))
-                | 'remove duplicated ts' >> beam.Map(lambda df: df.drop_duplicates(subset='ts', keep='first'))
+                | 'remove duplicated minute' >> beam.Map(lambda df: df.drop_duplicates(subset='minute', keep='first'))
+                #| 'write to csv ' >> beam.Map(lambda df: store_df(df))
                 | 'interpolate quote values for missing ts ' >> beam.Map(lambda df: interpolate_missing_ts(df))
                 | 'drop rule out goals ' >> beam.Map(lambda df: drop_rule_out_goals(df))
                 | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
@@ -438,9 +407,35 @@ def run(args=None):
                 | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
                 | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
                 | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
-                | 'as list of lists ' >> beam.ParDo(WriteToCsv())
-                | 'write to csv ' >> WriteToText('gs://' + bucket + '/data_' + start_of_day + '.csv')
+                | 'convert df to list of records ' >> beam.FlatMap(lambda df: df.values.tolist())
+                | 'csv format ' >> beam.Map(lambda row: ';'.join([str(column) for column in row]))
+                | 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv', header='minute,prediction,back,lay,start_lay,start_back,hgoal,agoal,available,matched,total_available,total_matched,draw_perc')
             )
+
+        # _ = (pipeline
+        #         | 'Create sample pcoll' >> ReadFromText(file_pattern='C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\gcp\\debug\\*.csv', skip_header_lines=1)
+        #         | 'split ' >> beam.Map(lambda row: row.split(';'))
+        #         | 'assign ev_id as key ' >> WithKeys(lambda row : row[0])
+        #         | 'group by key' >> GroupByKey()
+        #         | 'get list of rows ' >> beam.Map(lambda tuple: tuple[1])
+        #         | 'create dataframe for an event ' >> beam.Map(lambda rows: create_df_by_event(rows))
+        #         | ' cast minute to int ' >> beam.Map(lambda df: df.astype({'minute':'int'}))
+        #         | ' cast lay to int ' >> beam.Map(lambda df: df.astype({'lay':'float'}))
+        #         | ' cast ag to int ' >> beam.Map(lambda df: df.astype({'agoal':'int'}))
+        #         | ' cast hg to int ' >> beam.Map(lambda df: df.astype({'hgoal':'int'}))
+        #         | 'interpolate quote values for missing ts ' >> beam.Map(lambda df: interpolate_missing_ts(df))
+        #         | 'drop rule out goals ' >> beam.Map(lambda df: drop_rule_out_goals(df))
+        #         | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
+        #         | 'add current_result column' >> beam.Map(lambda df: assign_current_result(df))
+        #         | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
+        #         | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
+        #         | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
+        #         | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
+        #         | 'convert df to list of records ' >> beam.FlatMap(lambda df: df.values.tolist())
+        #         | 'csv format ' >> beam.Map(lambda row: ';'.join([str(column) for column in row]))
+        #         | 'write to csv ' >> WriteToText('output.csv', file_name_suffix='.csv', header='minute,prediction,back,lay,start_lay,start_back,hgoal,agoal,available,matched,total_available,total_matched,draw_perc')
+        #         #| 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv')
+        #      )
 
     logging.info("pipeline started")
 

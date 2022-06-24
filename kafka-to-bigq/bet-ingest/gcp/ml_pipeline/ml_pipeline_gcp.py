@@ -5,18 +5,22 @@ from __future__ import absolute_import
 import argparse
 import json
 import logging
+from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
 import math
 import apache_beam as beam
+import jsonpickle
 import numpy as np
 import pandas as pd
 from apache_beam import DoFn, WithKeys, GroupByKey
+from apache_beam.io import ReadFromText, WriteToText
 from apache_beam.options.pipeline_options import PipelineOptions
 from scipy.spatial.distance import cdist
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 import scipy.stats as st
+from datetime import datetime, time, timedelta
 
 def run(args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
@@ -24,6 +28,10 @@ def run(args=None):
     pipeline_options = PipelineOptions(
         args, streaming=True, save_main_session=True
     )
+
+    bucket = 'dump-bucket-4'
+    start_of_day = datetime.combine(datetime.utcnow(), time.min) - timedelta(1)
+    start_of_day = start_of_day.strftime("%Y-%m-%d")
 
     def matches_where_favourite_is_winning(df):
         return df[(df['goal_diff_by_prediction'] >= 1)]
@@ -115,7 +123,7 @@ def run(args=None):
         df = pd.DataFrame(rows[1:], columns=rows[0])
         return df[['lay', 'start_back', 'goal_diff_by_prediction', 'minute', 'draw_perc']]
 
-    def compute_and_store_model(df):
+    def compute_model(df):
 
         q_M = round_to_quarter(df['start_back'].max())
         q_m = round_to_quarter(df['start_back'].min())
@@ -227,8 +235,7 @@ def run(args=None):
         #     'revenue': break_even_lay
         # }
 
-        with open('result\\' + json_name + '.json', 'w') as fp:
-            json.dump(summary, fp)
+        yield jsonpickle.decode(summary)
 
     def select_start_back_interval(row):
         last_thr = -1
@@ -243,7 +250,7 @@ def run(args=None):
 
         _ = (
                 pipeline
-                | "Read csvs " >> beam.io.ReadFromText(file_pattern=input_folder + '\*.csv', skip_header_lines=1)
+                | "Read csvs " >> beam.io.ReadFromText(file_pattern='gs://' + bucket + '/' + start_of_day + '/stage/*.csv', skip_header_lines=1)
                 | "Parse record " >> beam.ParDo(Record())
                 | "drop rows with nan goal diff " >> beam.Filter(lambda row: not math.isnan(row['start_back']) and not math.isnan(row['goal_diff_by_prediction']))
                 | "Log scale lay quote " >> beam.Map(lambda row: log_scale_quote(row))
@@ -256,7 +263,8 @@ def run(args=None):
                   "one goal diff for favourite player " >> beam.Map(lambda df: matches_where_favourite_is_winning(df))
                 | "discard empty dataframe " >> beam.Filter(lambda df: not df.empty)
                 | 'Remove outliers ' >> beam.Map(lambda df: remove_outliers(df))
-                | 'Calculate risk ' >> beam.Map(lambda df: compute_and_store_model(df))
+                | 'Calculate risk ' >> beam.Map(lambda df: compute_model(df))
+                | 'write model ' >> WriteToText('gs://' + bucket + '/model/')
         )
 
 
