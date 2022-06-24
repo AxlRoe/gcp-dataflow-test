@@ -53,7 +53,7 @@ python juliaset_main.py \
 import logging
 import os
 
-import prepare_pipeline
+from prepare_pipeline import prepare_pipeline
 
 if __name__ == '__main__':
   logging.getLogger().setLevel(logging.INFO)
