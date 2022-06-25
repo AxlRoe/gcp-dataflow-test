@@ -98,16 +98,13 @@ def run(args=None):
 
     class Record(DoFn):
         def process(self, element):
-            back, lay, start_lay, start_back, hgoal, agoal, available, matched, total_available, total_matched, draw_perc, prediction, event_id, runner_name, ts, minute, sum_goals, current_result, goal_diff_by_prediction = element.split(
-                ";")
+            back, lay, start_lay, start_back, hgoal, agoal, available, matched, total_available, total_matched, draw_perc, prediction, event_id, runner_name, ts, minute, sum_goals, current_result, goal_diff_by_prediction = element.split(";")
 
             return [{
-                'event_id': event_id,
                 'lay': float(lay),
                 'start_back': float(start_back) if start_back != '' else float('NaN'),
                 'minute': minute,
-                'goal_diff_by_prediction': float(goal_diff_by_prediction) if goal_diff_by_prediction != '' else float(
-                    'NaN'),
+                'goal_diff_by_prediction': float(goal_diff_by_prediction) if goal_diff_by_prediction != '' else float('NaN'),
                 'draw_perc': draw_perc
             }]
 
@@ -119,9 +116,8 @@ def run(args=None):
         return str(np.float64((Decimal(d) * 2).quantize(Decimal('1'), rounding=ROUND_HALF_UP) / 2))
 
     def create_df_by_event(rows):
-        rows.insert(0, ['event_id', 'lay', 'start_back', 'goal_diff_by_prediction', 'minute', 'draw_perc'])
-        df = pd.DataFrame(rows[1:], columns=rows[0])
-        return df[['lay', 'start_back', 'goal_diff_by_prediction', 'minute', 'draw_perc']]
+        rows.insert(0, ['lay', 'start_back', 'goal_diff_by_prediction', 'minute', 'draw_perc'])
+        return pd.DataFrame(rows[1:], columns=rows[0])
 
     def compute_model(df):
 
@@ -235,7 +231,7 @@ def run(args=None):
         #     'revenue': break_even_lay
         # }
 
-        yield jsonpickle.decode(summary)
+        yield summary
 
     def select_start_back_interval(row):
         last_thr = -1
@@ -250,7 +246,8 @@ def run(args=None):
 
         _ = (
                 pipeline
-                | "Read csvs " >> beam.io.ReadFromText(file_pattern='gs://' + bucket + '/' + start_of_day + '/stage/*.csv', skip_header_lines=1)
+                #| "Read csvs " >> beam.io.ReadFromText(file_pattern='gs://' + bucket + '/' + start_of_day + '/stage/*.csv', skip_header_lines=1)
+                | "Read csvs " >> ReadFromText(file_pattern='C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\gcp_ml\\*.csv', skip_header_lines=1)
                 | "Parse record " >> beam.ParDo(Record())
                 | "drop rows with nan goal diff " >> beam.Filter(lambda row: not math.isnan(row['start_back']) and not math.isnan(row['goal_diff_by_prediction']))
                 | "Log scale lay quote " >> beam.Map(lambda row: log_scale_quote(row))
@@ -264,7 +261,9 @@ def run(args=None):
                 | "discard empty dataframe " >> beam.Filter(lambda df: not df.empty)
                 | 'Remove outliers ' >> beam.Map(lambda df: remove_outliers(df))
                 | 'Calculate risk ' >> beam.Map(lambda df: compute_model(df))
-                | 'write model ' >> WriteToText('gs://' + bucket + '/model/')
+                | 'Get model key ' >> WithKeys(lambda model: model['key'])
+                | 'write to csv ' >> WriteToText('model', file_name_suffix='.json', num_shards=0, shard_name_template='')
+                #| 'write model ' >> WriteToText('gs://' + bucket + '/model/', file_name_suffix='.json')
         )
 
 
