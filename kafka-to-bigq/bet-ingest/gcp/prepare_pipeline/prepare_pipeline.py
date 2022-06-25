@@ -60,7 +60,6 @@ class RunnerRow (DoFn):
     def process(self, element):
         return [{
             'id': element['id'],
-            'runner_id': element['runner_id'],
             'available': element['available'],
             'back': float(element['back']),
             'lay': float(element['lay']),
