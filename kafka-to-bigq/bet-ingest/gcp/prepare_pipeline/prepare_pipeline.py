@@ -266,17 +266,15 @@ def run(args=None):
         return tmp_df
 
     def is_draw_match(df):
+        agoals = np.array(df['agoal'])
+        hgoals = np.array(df['hgoal'])
+        sum_goals = np.add(agoals, hgoals)
+        draw_scores = np.where(sum_goals % 2 == 0, sum_goals)
 
-        results = np.array(df['current_result'])
-        dict = Counter(results)
-        draw = 0 if dict['DRAW'] is None else dict['DRAW']
-        expected = 0 if dict['EXPECTED'] is None else dict['EXPECTED']
-        wrong = 0 if dict['WRONG'] is None else dict['WRONG']
-        other = expected + wrong
-        p = (draw / results.size) * 100
+        p = (draw_scores.size / sum_goals.size) * 100
         if p >= 85:
             logging.info(
-                'skip event because it is draw at ' + str(p) + "%, draw: " + str(draw) + " other: " + str(other))
+                'skip event because it is draw at ' + str(p) + "%")
             return True
         else:
             return False
