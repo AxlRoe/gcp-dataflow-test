@@ -269,8 +269,9 @@ def run(args=None):
         tmp_df = df[['agoal','hgoal']]
         tmp_df['sum_goal'] = tmp_df.apply(lambda row: row.agoal + row.hgoal, axis=1)
         tmp_df['draw'] = tmp_df['sum_goal'].where(tmp_df['sum_goal'] % 2 == 0)
-
-        p = (tmp_df['draw'].size / tmp_df['sum_goal'].size) * 100
+        total = tmp_df['sum_goal'].size
+        draw = tmp_df[~tmp_df['draw'].isna()]['draw'].size #get rows with draw score
+        p = (draw / total) * 100
         if p >= 85:
             logging.info('skip event because it is draw at ' + str(p) + "%")
             return True
