@@ -285,6 +285,10 @@ def run(args=None):
         df['goal_diff_by_prediction'] = df.apply(lambda row: row.hgoal - row.agoal if row.prediction == 'HOME' else row.agoal - row.hgoal, axis=1)
         return df
 
+    def assign_current_result(df):
+        df['current_result'] = df.apply(lambda row: current_result_is(row.prediction, row.hgoal, row.agoal), axis=1)
+        return df
+
     def merge_df(dfs):
         if not dfs:
             logging.info("No dataframe to concat ")
@@ -375,6 +379,7 @@ def run(args=None):
                 | 'interpolate quote values for missing ts ' >> beam.Map(lambda df: interpolate_missing_ts(df))
                 | 'drop rule out goals ' >> beam.Map(lambda df: drop_rule_out_goals(df))
                 | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
+                | 'add current_result column' >> beam.Map(lambda df: assign_current_result(df))
                 | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
                 | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
                 | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
