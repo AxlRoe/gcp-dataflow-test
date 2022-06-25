@@ -75,17 +75,15 @@ class RunnerRow (DoFn):
 class EnrichWithStartQuotes (DoFn):
     def process(self, tuple, runners):
         sample = tuple[1]
-        runner_dict = {x['id'] + '_' + x['runner_id'] + '#' + x['market_name']: x for x in filter(lambda runner: runner['id'] == sample['event_id'], runners)}
-        key = sample['id']
+        runner_dict = {x['id']: x for x in filter(lambda runner: runner['id'] == sample['event_id'], runners)}
 
-        if key in runner_dict.keys():
-            if runner_dict[key]:
-                runner = runner_dict[key]
-                sample['start_lay'] = runner['lay']
-                sample['start_back'] = runner['back']
-        else:
-            logging.warn("Missing " + key + " in runner table ")
+        if not sample['id'] in runner_dict.keys():
+            logging.warn("Missing " + str(sample['id']) + " in runner table ")
             yield {}
+
+        runner = runner_dict[sample['id']]
+        sample['start_lay'] = runner['lay']
+        sample['start_back'] = runner['back']
 
         yield sample
 
@@ -94,15 +92,13 @@ class EnrichWithPrediction (DoFn):
 
         sample = tuple[1]
         match_dict = {x['event_id']: x for x in filter(lambda match: match['event_id'] == sample['event_id'], matches)}
-        key = sample['event_id']
 
-        if key in match_dict.keys():
-            if match_dict[key]:
-                match = match_dict[key]
-                sample['prediction'] = match['favourite']
-        else:
-            logging.warn("Missing " + key + " in match table ")
+        if not sample['id'] in match_dict.keys():
+            logging.warn("Missing " + str(sample['id']) + " in match table ")
             yield {}
+
+        match = match_dict[sample['id']]
+        sample['prediction'] = match['favourite']
 
         yield sample
 
@@ -355,7 +351,7 @@ def run(args=None):
                 | 'group by start back interval ' >> GroupByKey()
                 | 'create score df ' >> beam.Map(lambda tuple: (tuple[0], pd.DataFrame(tuple[1])))
                 | 'calculate draw percentage ' >> beam.Map(lambda tuple: calculate_draw_percentage(tuple))
-                #| 'debug join runner & match ' >> beam.Map(print)
+                #| 'debug draw match ' >> beam.Map(print)
         )
 
         samples_tuple = (
@@ -379,7 +375,7 @@ def run(args=None):
                 | 'Merge back record' >> beam.CoGroupByKey()
                 | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
                 | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
-                | "add key " >> WithKeys(lambda x: x['event_id'] + '#' + x['runner_id'])
+                | "add key " >> WithKeys(lambda x: x['event_id'])
         )
 
         samples_enriched_with_start_quotes = (

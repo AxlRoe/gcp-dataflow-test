@@ -11,7 +11,7 @@ python ml_main.py \
 --job data-preparation \
 --project $PROJECT \
 --region europe-west1 \
---setup_file ./ml_setup.py \
+--setup_file ./setup.py \
 --runner DataflowRunner \
 --staging_location gs://$BUCKET_NAME/staging \
 --temp_location gs://dump-bucket-4/tmp/ \
