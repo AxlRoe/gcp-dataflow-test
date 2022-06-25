@@ -76,11 +76,11 @@ class EnrichWithStartQuotes (DoFn):
         sample = tuple[1]
         runner_dict = {x['id']: x for x in filter(lambda runner: runner['id'] == sample['event_id'], runners)}
 
-        if not sample['id'] in runner_dict.keys():
-            logging.warn("Missing " + str(sample['id']) + " in runner table ")
+        if not sample['event_id'] in runner_dict.keys():
+            logging.warn("Missing " + str(sample['event_id']) + " in runner table ")
             yield {}
 
-        runner = runner_dict[sample['id']]
+        runner = runner_dict[sample['event_id']]
         sample['start_lay'] = runner['lay']
         sample['start_back'] = runner['back']
 
@@ -92,11 +92,11 @@ class EnrichWithPrediction (DoFn):
         sample = tuple[1]
         match_dict = {x['event_id']: x for x in filter(lambda match: match['event_id'] == sample['event_id'], matches)}
 
-        if not sample['id'] in match_dict.keys():
-            logging.warn("Missing " + str(sample['id']) + " in match table ")
+        if not sample['event_id'] in match_dict.keys():
+            logging.warn("Missing " + str(sample['event_id']) + " in match table ")
             yield {}
 
-        match = match_dict[sample['id']]
+        match = match_dict[sample['event_id']]
         sample['prediction'] = match['favourite']
 
         yield sample
