@@ -99,7 +99,8 @@ def run(args=None):
 
     class Record(DoFn):
         def process(self, element):
-            minute, prediction, back, lay, start_lay, start_back, hgoal, agoal, available, matched, total_available, total_matched, draw_perc, sum_goals, current_result, goal_diff_by_prediction = element.split(";")
+            print(element)
+            minute, prediction, back, lay, start_lay, start_back, draw_perc, goal_diff_by_prediction = element.split(";")
 
             return [{
                 'lay': float(lay),

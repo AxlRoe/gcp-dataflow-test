@@ -24,7 +24,6 @@ class JsonParser(DoFn):
         """Processes each windowed element by extracting the message body and its
         publish time into a tuple.
         """
-        # yield json.loads('{"id": "1", "market_name" : "test", "runner_name" : "test", "ts" : "2021-10-05T15:50:00.890Z", "lay": 1.0, "back" : 1.0}')
         if not file:
             logging.info("File read is null")
             yield json.loads('{}')
@@ -60,15 +59,8 @@ class RunnerRow (DoFn):
     def process(self, element):
         return [{
             'id': element['id'],
-            'available': element['available'],
             'back': float(element['back']),
-            'lay': float(element['lay']),
-            'market_id': element['market_id'],
-            'market_name': element['market_name'],
-            'matched': element['matched'],
-            'runner_name': element['runner_name'],
-            'total_available': round(float(element['total_available']) * 100) / 100,
-            'total_matched': round(float(element['total_matched']) * 100) / 100
+            'lay': float(element['lay'])
         }]
 
 class EnrichWithStartQuotes (DoFn):
@@ -135,10 +127,6 @@ def run(args=None):
             "hgoal": stats["home"]["goals"],
             "guest": sample["guest"],
             "agoal": stats["away"]["goals"],
-            "total_available": round(sample["totalAvailable"] * 100) / 100,
-            "total_matched": round(sample["totalMatched"] * 100) / 100,
-            "matched": round(sample["matched"] * 100) / 100,
-            "available": round(sample["available"] * 100) / 100,
         }
 
     def calculate_draw_percentage(tuple):
@@ -207,7 +195,7 @@ def run(args=None):
         return output
 
     def create_df_by_event(rows):
-        rows.insert(0, ['event_id','minute','prediction','back','lay','start_lay','start_back','hgoal','agoal','available','matched','total_available','total_matched','draw_perc'])
+        rows.insert(0, ['event_id','minute','prediction','back','lay','start_lay','start_back','hgoal','agoal','draw_perc'])
         df = pd.DataFrame(rows[1:], columns=rows[0])
         return df.drop(columns=['event_id'])
 
@@ -273,9 +261,6 @@ def run(args=None):
         tmp_df['start_back'] = tmp_df['start_back'].pad()
         tmp_df['start_lay'] = tmp_df['start_lay'].pad()
         tmp_df['available'] = tmp_df['available'].pad()
-        tmp_df['matched'] = tmp_df['matched'].pad()
-        tmp_df['total_matched'] = tmp_df['total_matched'].pad()
-        tmp_df['total_available'] = tmp_df['total_available'].pad()
         tmp_df['draw_perc'] = tmp_df['draw_perc'].pad()
         tmp_df['prediction'] = tmp_df['prediction'].pad()
 
@@ -299,11 +284,6 @@ def run(args=None):
 
     def assign_goal_diff_by_prediction(df):
         df['goal_diff_by_prediction'] = df.apply(lambda row: row.hgoal - row.agoal if row.prediction == 'HOME' else row.agoal - row.hgoal, axis=1)
-        return df
-
-    # TODO remove this column is useless
-    def assign_current_result(df):
-        df['current_result'] = df.apply(lambda row: current_result_is(row.prediction, row.hgoal, row.agoal), axis=1)
         return df
 
     def merge_df(dfs):
@@ -396,14 +376,13 @@ def run(args=None):
                 | 'interpolate quote values for missing ts ' >> beam.Map(lambda df: interpolate_missing_ts(df))
                 | 'drop rule out goals ' >> beam.Map(lambda df: drop_rule_out_goals(df))
                 | 'add sum_goal column ' >> beam.Map(lambda df: df.assign(sum_goals=lambda row: row.agoal + row.hgoal))
-                | 'add current_result column' >> beam.Map(lambda df: assign_current_result(df))
                 | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
                 | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
                 | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
                 | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
                 | 'convert df to list of records ' >> beam.FlatMap(lambda df: df.values.tolist())
                 | 'csv format ' >> beam.Map(lambda row: ';'.join([str(column) for column in row]))
-                | 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv', num_shards=0, shard_name_template='', header='minute,prediction,back,lay,start_lay,start_back,hgoal,agoal,available,matched,total_available,total_matched,draw_perc,sum_goals,current_result,goal_diff_by_prediction')
+                | 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv', num_shards=0, shard_name_template='', header='minute;prediction;back;lay;start_lay;start_back;draw_perc;goal_diff_by_prediction')
             )
 
         # _ = (pipeline
