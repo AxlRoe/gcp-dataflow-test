@@ -379,7 +379,7 @@ def run(args=None):
                 | 'Merge back record' >> beam.CoGroupByKey()
                 | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
                 | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
-                | "add key " >> WithKeys(lambda x: x['event_id'] + '#' + x['runner_id'])
+                | "add key " >> WithKeys(lambda x: x['event_id'])
         )
 
         samples_enriched_with_start_quotes = (
