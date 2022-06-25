@@ -260,7 +260,6 @@ def run(args=None):
         tmp_df['agoal'] = tmp_df['agoal'].pad()
         tmp_df['start_back'] = tmp_df['start_back'].pad()
         tmp_df['start_lay'] = tmp_df['start_lay'].pad()
-        tmp_df['available'] = tmp_df['available'].pad()
         tmp_df['draw_perc'] = tmp_df['draw_perc'].pad()
         tmp_df['prediction'] = tmp_df['prediction'].pad()
 
