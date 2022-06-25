@@ -380,7 +380,7 @@ def run(args=None):
                 | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
                 | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
                 | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
-                #| 'select columns ' >> beam.Map(lambda df: df[['minute','prediction','back','lay','start_lay','start_back','draw_perc','goal_diff_by_prediction']])
+                | 'select columns ' >> beam.Map(lambda df: df[['minute','prediction','back','lay','start_lay','start_back','draw_perc','goal_diff_by_prediction']])
                 | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
                 | 'convert df to list of records ' >> beam.FlatMap(lambda df: df.values.tolist())
                 | 'csv format ' >> beam.Map(lambda row: ';'.join([str(column) for column in row]))
