@@ -298,8 +298,7 @@ def run(args=None):
             return False
 
     def assign_goal_diff_by_prediction(df):
-        df['goal_diff_by_prediction'] = df.apply(
-            lambda row: row.hgoal - row.agoal if row.prediction == 'HOME' else row.agoal - row.hgoal, axis=1)
+        df['goal_diff_by_prediction'] = df.apply(lambda row: row.hgoal - row.agoal if row.prediction == 'HOME' else row.agoal - row.hgoal, axis=1)
         return df
 
     # TODO remove this column is useless
@@ -404,7 +403,7 @@ def run(args=None):
                 | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
                 | 'convert df to list of records ' >> beam.FlatMap(lambda df: df.values.tolist())
                 | 'csv format ' >> beam.Map(lambda row: ';'.join([str(column) for column in row]))
-                | 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv', num_shards=0, shard_name_template='', header='minute,prediction,back,lay,start_lay,start_back,hgoal,agoal,available,matched,total_available,total_matched,draw_perc')
+                | 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv', num_shards=0, shard_name_template='', header='minute,prediction,back,lay,start_lay,start_back,hgoal,agoal,available,matched,total_available,total_matched,draw_perc,sum_goals,current_result,goal_diff_by_prediction')
             )
 
         # _ = (pipeline

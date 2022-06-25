@@ -14,7 +14,8 @@ import jsonpickle
 import numpy as np
 import pandas as pd
 from apache_beam import DoFn, WithKeys, GroupByKey
-from apache_beam.io import ReadFromText, WriteToText
+from apache_beam.io import ReadFromText, WriteToText, fileio
+from apache_beam.io.fileio import destination_prefix_naming
 from apache_beam.options.pipeline_options import PipelineOptions
 from scipy.spatial.distance import cdist
 from sklearn.linear_model import LinearRegression
@@ -98,7 +99,7 @@ def run(args=None):
 
     class Record(DoFn):
         def process(self, element):
-            back, lay, start_lay, start_back, hgoal, agoal, available, matched, total_available, total_matched, draw_perc, prediction, event_id, runner_name, ts, minute, sum_goals, current_result, goal_diff_by_prediction = element.split(";")
+            minute, prediction, back, lay, start_lay, start_back, hgoal, agoal, available, matched, total_available, total_matched, draw_perc, sum_goals, current_result, goal_diff_by_prediction = element.split(";")
 
             return [{
                 'lay': float(lay),
@@ -261,8 +262,11 @@ def run(args=None):
                 | "discard empty dataframe " >> beam.Filter(lambda df: not df.empty)
                 | 'Remove outliers ' >> beam.Map(lambda df: remove_outliers(df))
                 | 'Calculate risk ' >> beam.Map(lambda df: compute_model(df))
-                | 'Get model key ' >> WithKeys(lambda model: model['key'])
-                | 'write to csv ' >> WriteToText('model', file_name_suffix='.json', num_shards=0, shard_name_template='')
+                | 'write to file ' >> fileio.WriteToFiles(
+                                                path='.',
+                                                destination=lambda model: model['key'],
+                                                file_naming=destination_prefix_naming())
+                #| 'write to csv ' >> WriteToText('model', file_name_suffix='.json', num_shards=0, shard_name_template='')
                 #| 'write model ' >> WriteToText('gs://' + bucket + '/model/', file_name_suffix='.json')
         )
 
