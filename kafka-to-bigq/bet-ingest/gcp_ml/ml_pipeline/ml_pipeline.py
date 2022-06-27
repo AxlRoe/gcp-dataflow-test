@@ -35,9 +35,6 @@ def run(args=None):
     )
 
     bucket = 'dump-bucket-4'
-    start_of_day = datetime.combine(datetime.utcnow(), time.min)
-    start_of_day = start_of_day.strftime("%Y-%m-%d")
-
     def matches_where_favourite_is_winning(df):
         return df[(df['goal_diff_by_prediction'] >= 1)]
 
