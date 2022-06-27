@@ -294,7 +294,7 @@ def run(args=None):
         return pd.concat(dfs).reset_index(drop=True)
 
     start_of_day = datetime.combine(datetime.utcnow(), time.min) - timedelta(1)
-    #start_of_day = '2022-06-13' # = start_of_day.strftime("%Y-%m-%d")
+    start_of_day = start_of_day.strftime("%Y-%m-%d") #'2022-06-27'
     bucket = 'dump-bucket-4'
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
