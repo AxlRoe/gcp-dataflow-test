@@ -14,7 +14,7 @@ python ml_main.py \
 --setup_file ./setup.py \
 --runner DataflowRunner \
 --staging_location gs://$BUCKET_NAME/staging \
---temp_location gs://dump-bucket-4/tmp/ \
+--temp_location gs://$BUCKET_NAME/tmp/ \
 --experiment use_unsupported_python_version pipeline
 #--bucket $BUCKET_NAME \
 #--requirements_file requirements.txt \

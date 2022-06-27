@@ -3,24 +3,24 @@
 from __future__ import absolute_import
 
 import argparse
-import json
 import logging
+import math
+from datetime import datetime, time
 from decimal import Decimal, ROUND_HALF_UP
 
-import math
 import apache_beam as beam
 import jsonpickle
 import numpy as np
 import pandas as pd
+import scipy.stats as st
 from apache_beam import DoFn, WithKeys, GroupByKey
-from apache_beam.io import ReadFromText, fileio
+from apache_beam.io import fileio
 from apache_beam.io.fileio import destination_prefix_naming
 from apache_beam.options.pipeline_options import PipelineOptions
 from scipy.spatial.distance import cdist
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
-import scipy.stats as st
-from datetime import datetime, time
+
 
 class JsonSink(fileio.TextSink):
     def write(self, record):
@@ -31,7 +31,7 @@ def run(args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
     pipeline_options = PipelineOptions(
-        args, streaming=True, save_main_session=True
+        args, save_main_session=True
     )
 
     bucket = 'dump-bucket-4'
