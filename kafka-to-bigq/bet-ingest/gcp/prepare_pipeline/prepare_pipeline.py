@@ -282,10 +282,6 @@ def run(args=None):
         df['goal_diff_by_prediction'] = df.apply(lambda row: row.hgoal - row.agoal if row.prediction == 'HOME' else row.agoal - row.hgoal, axis=1)
         return df
 
-    def assign_current_result(df):
-        df['current_result'] = df.apply(lambda row: current_result_is(row.prediction, row.hgoal, row.agoal), axis=1)
-        return df
-
     def merge_df(dfs):
         if not dfs:
             logging.info("No dataframe to concat ")

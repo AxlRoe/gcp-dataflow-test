@@ -5,7 +5,6 @@ from __future__ import absolute_import
 import argparse
 import json
 import logging
-from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
 import math
@@ -14,14 +13,19 @@ import jsonpickle
 import numpy as np
 import pandas as pd
 from apache_beam import DoFn, WithKeys, GroupByKey
-from apache_beam.io import ReadFromText, WriteToText, fileio
+from apache_beam.io import ReadFromText, fileio
 from apache_beam.io.fileio import destination_prefix_naming
 from apache_beam.options.pipeline_options import PipelineOptions
 from scipy.spatial.distance import cdist
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 import scipy.stats as st
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
+
+class JsonSink(fileio.TextSink):
+    def write(self, record):
+        self._fh.write(jsonpickle.encode(record).encode('utf8'))
+        self._fh.write('\n'.encode('utf8'))
 
 def run(args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
@@ -31,7 +35,7 @@ def run(args=None):
     )
 
     bucket = 'dump-bucket-4'
-    start_of_day = datetime.combine(datetime.utcnow(), time.min) - timedelta(1)
+    start_of_day = datetime.combine(datetime.utcnow(), time.min)
     start_of_day = start_of_day.strftime("%Y-%m-%d")
 
     def matches_where_favourite_is_winning(df):
@@ -94,8 +98,7 @@ def run(args=None):
         if lo_d > dist_p and lo < 5:  # minum cluster size to not be classified as outlier
             l_outliers.append(np_sorted_values[0:lo])
 
-        return [item for sublist in h_outliers for item in sublist], [item for sublist in l_outliers for item in
-                                                                      sublist]
+        return [item for sublist in h_outliers for item in sublist], [item for sublist in l_outliers for item in sublist]
 
     class Record(DoFn):
         def process(self, element):
@@ -121,10 +124,10 @@ def run(args=None):
         return pd.DataFrame(rows[1:], columns=rows[0])
 
     def compute_model(df):
-
-        q_M = round_to_quarter(df['start_back'].max())
-        q_m = round_to_quarter(df['start_back'].min())
-        draw_perc = df['draw_perc'].max()
+        tmp_df = df.copy()
+        q_M = round_to_quarter(tmp_df['start_back'].max())
+        q_m = round_to_quarter(tmp_df['start_back'].min())
+        draw_perc = tmp_df['draw_perc'].max()
 
         # df.to_csv('tmp_df_pipe.csv', sep=';', index=False, encoding="utf-8", line_terminator='\n')
 
@@ -132,10 +135,10 @@ def run(args=None):
         if q_m == q_M:
             json_name = str(q_m)
 
-        df['minute'] = pd.to_numeric(df['minute']) #TODO maybe useless
+        tmp_df['minute'] = pd.to_numeric(tmp_df['minute'])
         X_fit = np.arange(0, 120, 2)[:, np.newaxis]
-        X = df[['minute']].values
-        y = df[['lay']].values
+        X = tmp_df[['minute']].values
+        y = tmp_df[['lay']].values
 
         m_x = X.flatten().min()
         M_x = 100
@@ -161,12 +164,11 @@ def run(args=None):
         X_fit = X_fit.reshape(1, -1).flatten()
         outlier_selector = np.where(ok, 'b', 'r').reshape(1, -1).flatten()
 
-        sure_bet_perc_df = df[['minute', 'sure_bet_perc_by_min']].groupby('minute').min()
+        sure_bet_perc_df = tmp_df[['minute', 'sure_bet_perc_by_min']].groupby('minute').min()
         sure_bet_perc_dict = sure_bet_perc_df.to_dict()['sure_bet_perc_by_min']
 
         # create 95% confidence interval for population mean weight
-        interval = st.t.interval(alpha=0.95, df=len(df['start_back']) - 1, loc=np.mean(df['start_back']),
-                                 scale=st.sem(df['start_back']))
+        interval = st.t.interval(alpha=0.95, df=len(tmp_df['start_back']) - 1, loc=np.mean(tmp_df['start_back']), scale=st.sem(tmp_df['start_back']))
         mean_responsibility = 3 * 0.95 * ((interval[1] + interval[0]) / 2 - 1)
         revenue = 2 * (10 ** y_quad_fit - 1)
 
@@ -206,7 +208,7 @@ def run(args=None):
             'q_min': q_m,
             'q_max': q_M,
             'break_even_minute': break_even_minute,
-            'break_even_income': break_even_income,
+            'break_even_income': round(float(break_even_income) * 100) / 100,
             'draw_perc': draw_perc,
             'sure_bet_perc_by_10min': sure_bet_perc
         }
@@ -247,8 +249,8 @@ def run(args=None):
 
         _ = (
                 pipeline
-                #| "Read csvs " >> beam.io.ReadFromText(file_pattern='gs://' + bucket + '/' + start_of_day + '/stage/*.csv', skip_header_lines=1)
-                | "Read csvs " >> ReadFromText(file_pattern='C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\gcp_ml\\*.csv', skip_header_lines=1)
+                | "Read csvs " >> beam.io.ReadFromText(file_pattern='gs://' + bucket + '/stage/*.csv', skip_header_lines=1)
+                #| "Read csvs " >> ReadFromText(file_pattern='C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\gcp_ml\\*.csv', skip_header_lines=1)
                 | "Parse record " >> beam.ParDo(Record())
                 | "drop rows with nan goal diff " >> beam.Filter(lambda row: not math.isnan(row['start_back']) and not math.isnan(row['goal_diff_by_prediction']))
                 | "Log scale lay quote " >> beam.Map(lambda row: log_scale_quote(row))
@@ -263,11 +265,12 @@ def run(args=None):
                 | 'Remove outliers ' >> beam.Map(lambda df: remove_outliers(df))
                 | 'Calculate risk ' >> beam.Map(lambda df: compute_model(df))
                 | 'write to file ' >> fileio.WriteToFiles(
-                                                path='.',
+                                                path='gs://' + bucket + '/model/',
                                                 destination=lambda model: model['key'],
-                                                file_naming=destination_prefix_naming())
-                #| 'write to csv ' >> WriteToText('model', file_name_suffix='.json', num_shards=0, shard_name_template='')
-                #| 'write model ' >> WriteToText('gs://' + bucket + '/model/', file_name_suffix='.json')
+                                                sink=lambda dest: JsonSink(),
+                                                max_writers_per_bundle=1,
+                                                shards=1,
+                                                file_naming=destination_prefix_naming(suffix='.json'))
         )
 
 

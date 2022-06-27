@@ -57,6 +57,6 @@ from ml_pipeline import ml_pipeline
 
 if __name__ == '__main__':
   logging.getLogger().setLevel(logging.INFO)
-  os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'data-flow-sa.json'
+  #os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'data-flow-sa.json'
   os.environ['GOOGLE_CLOUD_PROJECT'] = 'scraper-v1-351921'
   ml_pipeline.run()
