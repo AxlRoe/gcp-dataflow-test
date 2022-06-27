@@ -8,7 +8,7 @@ virtualenv venv
 source venv/bin/activate
 
 python ml_main.py \
---job data-preparation \
+--job build-model \
 --project $PROJECT \
 --region europe-west1 \
 --setup_file ./setup.py \
