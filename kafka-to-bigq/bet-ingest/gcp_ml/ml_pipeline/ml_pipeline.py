@@ -99,7 +99,6 @@ def run(args=None):
 
     class Record(DoFn):
         def process(self, element):
-            print(element)
             minute, prediction, back, lay, start_lay, start_back, draw_perc, goal_diff_by_prediction = element.split(";")
 
             return [{
@@ -133,7 +132,7 @@ def run(args=None):
         if q_m == q_M:
             json_name = str(q_m)
 
-        df['minute'] = pd.to_numeric(df['minute'])
+        df['minute'] = pd.to_numeric(df['minute']) #TODO maybe useless
         X_fit = np.arange(0, 120, 2)[:, np.newaxis]
         X = df[['minute']].values
         y = df[['lay']].values
@@ -233,7 +232,7 @@ def run(args=None):
         #     'revenue': break_even_lay
         # }
 
-        yield summary
+        return summary
 
     def select_start_back_interval(row):
         last_thr = -1
