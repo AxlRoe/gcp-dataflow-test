@@ -48,9 +48,9 @@ with models.DAG(
 ) as dag_native_python:
 
     # [START howto_operator_start_python_job]
-    p1_job = BeamRunPythonPipelineOperator(
-        task_id="p1_job",
-        py_file='gs://dump-bucket-4/pipeline/p1_test.py',
+    prepare_job = BeamRunPythonPipelineOperator(
+        task_id="prepare_pipeline",
+        py_file='gs://dump-bucket-4/pipeline/prepare_pipeline.py',
         py_options=[],
         # pipeline_options={
         #     'output': GCS_OUTPUT,
@@ -61,18 +61,18 @@ with models.DAG(
         dataflow_config={'location': 'europe-west1'},
     )
 
-    p2_job = BeamRunPythonPipelineOperator(
-        task_id="p2_job",
-        py_file='gs://dump-bucket-4/pipeline/p2_test.py',
+    ml_job = BeamRunPythonPipelineOperator(
+        task_id="ml_pipeline",
+        py_file='gs://dump-bucket-4/pipeline/ml_pipeline.py',
         py_options=[],
         # pipeline_options={
         #     'output': GCS_OUTPUT,
         # },
-        py_requirements=['apache-beam[gcp]==2.39.0', 'numpy==1.22.4', 'jsonpickle==2.1.0'],
+        py_requirements=['apache-beam[gcp]==2.39.0', 'joblib==1.1.0', 'jsonpickle==2.2.0','numpy==1.23.0','scikit-learn==1.1.1','scipy==1.8.1','threadpoolctl==3.1.0'],
         py_interpreter='python3',
         py_system_site_packages=True,
         dataflow_config={'location': 'europe-west1'},
     )
 
-    p1_job >> p2_job
+    prepare_job >> ml_job
 
