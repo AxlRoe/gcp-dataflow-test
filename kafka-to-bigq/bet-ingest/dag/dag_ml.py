@@ -39,7 +39,7 @@ default_args = {
     }
 }
 with models.DAG(
-    "prepare_pipeline",
+    "ml_ops",
     default_args=default_args,
     start_date=START_DATE,
     catchup=False,
