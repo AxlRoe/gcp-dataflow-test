@@ -4,12 +4,12 @@ from __future__ import absolute_import
 
 import argparse
 import logging
-from datetime import datetime, time
 
 import apache_beam as beam
 from apache_beam import DoFn, ParDo
 from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
+
 
 class MatchRow (DoFn):
     def process(self, element):
@@ -32,19 +32,17 @@ def run(args=None):
         args, save_main_session=True
     )
 
-    start_of_day = datetime.combine(datetime.utcnow(), time.min)
-    start_of_day = start_of_day.strftime("%Y-%m-%d") #'2022-06-27'
     bucket = 'dump-bucket-4'
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
         match_table_spec = bigquery.TableReference(projectId='scraper-v1-351921', datasetId='bet', tableId='match')
-        match_dict = (
+        _ = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
                 | 'Read match bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://' + bucket + '/tmp/', table=match_table_spec)
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
-                #| "debug match " >> beam.Map(print)
+                | "debug match " >> beam.Map(print)
         )
 
     logging.info("pipeline started")

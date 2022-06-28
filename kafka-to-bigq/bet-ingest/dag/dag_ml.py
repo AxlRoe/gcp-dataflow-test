@@ -32,11 +32,7 @@ START_DATE = datetime(2021, 1, 1)
 GCS_TMP = os.environ.get('GCP_DATAFLOW_GCS_TMP', 'gs://dump-bucket-4/temp/')
 GCS_STAGING = os.environ.get('GCP_DATAFLOW_GCS_STAGING', 'gs://dump-bucket-4/staging/')
 GCS_OUTPUT = os.environ.get('GCP_DATAFLOW_GCS_OUTPUT', 'gs://dump-bucket-4/output')
-GCS_PYTHON = os.environ.get('GCP_DATAFLOW_PYTHON', 'gs://dump-bucket-4/wordcount_debugging.py')
-
-GCS_JAR_PARTS = urlparse(GCS_JAR)
-GCS_JAR_BUCKET_NAME = GCS_JAR_PARTS.netloc
-GCS_JAR_OBJECT_NAME = GCS_JAR_PARTS.path[1:]
+GCS_PYTHON = os.environ.get('GCP_DATAFLOW_PYTHON', 'gs://dump-bucket-4/p_test.py')
 
 default_args = {
     'dataflow_default_options': {
@@ -44,7 +40,6 @@ default_args = {
         'stagingLocation': GCS_STAGING,
     }
 }
-
 with models.DAG(
     "example_gcp_dataflow_native_python",
     default_args=default_args,
@@ -54,30 +49,19 @@ with models.DAG(
     tags=['example'],
 ) as dag_native_python:
 
-    # # [START howto_operator_start_python_job]
-    # start_python_job = BeamRunPythonPipelineOperator(
-    #     task_id="start-python-job",
-    #     py_file=GCS_PYTHON,
-    #     py_options=[],
-    #     pipeline_options={
-    #         'output': GCS_OUTPUT,
-    #     },
-    #     py_requirements=['apache-beam[gcp]==2.39.0'],
-    #     py_interpreter='python3',
-    #     py_system_site_packages=False,
-    #     dataflow_config={'location': 'europe-west1'},
-    # )
-
-    start_python_job_local = BeamRunPythonPipelineOperator(
-        task_id="start-python-job-local",
-        py_file='apache_beam.examples.wordcount',
-        py_options=['-m'],
+    # [START howto_operator_start_python_job]
+    start_python_job = BeamRunPythonPipelineOperator(
+        task_id="start-python-job",
+        py_file=GCS_PYTHON,
+        py_options=[],
         pipeline_options={
             'output': GCS_OUTPUT,
         },
-        py_requirements=['apache-beam[gcp]==2.14.0'],
+        py_requirements=['apache-beam[gcp]==2.39.0'],
         py_interpreter='python3',
-        py_system_site_packages=False,
+        py_system_site_packages=True,
+        dataflow_config={'location': 'europe-west1'},
     )
+
 
 
