@@ -68,7 +68,7 @@ with models.DAG(
         # pipeline_options={
         #     'output': GCS_OUTPUT,
         # },
-        py_requirements=['apache-beam[gcp]==2.39.0', 'joblib==1.1.0', 'jsonpickle==2.2.0','numpy==1.23.0','scikit-learn==1.1.1','scipy==1.8.1','threadpoolctl==3.1.0'],
+        py_requirements=['apache-beam[gcp]==2.39.0', 'joblib==1.1.0', 'jsonpickle==2.2.0','numpy==1.22.4','scikit-learn==1.1.1','scipy==1.8.1','threadpoolctl==3.1.0'],
         py_interpreter='python3',
         py_system_site_packages=True,
         dataflow_config={'location': 'europe-west1'},
