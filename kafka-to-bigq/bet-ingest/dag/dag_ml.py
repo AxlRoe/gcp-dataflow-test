@@ -32,7 +32,7 @@ START_DATE = datetime(2021, 1, 1)
 GCS_TMP = os.environ.get('GCP_DATAFLOW_GCS_TMP', 'gs://dump-bucket-4/temp/')
 GCS_STAGING = os.environ.get('GCP_DATAFLOW_GCS_STAGING', 'gs://dump-bucket-4/staging/')
 GCS_OUTPUT = os.environ.get('GCP_DATAFLOW_GCS_OUTPUT', 'gs://dump-bucket-4/output')
-GCS_PYTHON = os.environ.get('GCP_DATAFLOW_PYTHON', 'gs://dump-bucket-4/p_test.py')
+GCS_PYTHON = os.environ.get('GCP_DATAFLOW_PYTHON', 'gs://dump-bucket-4/pipeline/p_test.py')
 
 default_args = {
     'dataflow_default_options': {
