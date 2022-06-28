@@ -31,7 +31,6 @@ START_DATE = datetime(2021, 1, 1)
 
 GCS_TMP = os.environ.get('GCP_DATAFLOW_GCS_TMP', 'gs://dump-bucket-4/temp/')
 GCS_STAGING = os.environ.get('GCP_DATAFLOW_GCS_STAGING', 'gs://dump-bucket-4/staging/')
-GCS_OUTPUT = os.environ.get('GCP_DATAFLOW_GCS_OUTPUT', 'gs://dump-bucket-4/output')
 GCS_PYTHON = os.environ.get('GCP_DATAFLOW_PYTHON', 'gs://dump-bucket-4/pipeline/p_test.py')
 
 default_args = {
@@ -54,9 +53,9 @@ with models.DAG(
         task_id="start-python-job",
         py_file=GCS_PYTHON,
         py_options=[],
-        pipeline_options={
-            'output': GCS_OUTPUT,
-        },
+        # pipeline_options={
+        #     'output': GCS_OUTPUT,
+        # },
         py_requirements=['apache-beam[gcp]==2.39.0'],
         py_interpreter='python3',
         py_system_site_packages=True,
