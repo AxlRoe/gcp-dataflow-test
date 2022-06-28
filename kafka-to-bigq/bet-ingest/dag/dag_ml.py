@@ -49,7 +49,7 @@ with models.DAG(
 
     # [START howto_operator_start_python_job]
     p1_job = BeamRunPythonPipelineOperator(
-        task_id="start-python-job",
+        task_id="p1_job",
         py_file='gs://dump-bucket-4/pipeline/p1_test.py',
         py_options=[],
         # pipeline_options={
@@ -62,7 +62,7 @@ with models.DAG(
     )
 
     p2_job = BeamRunPythonPipelineOperator(
-        task_id="start-python-job",
+        task_id="p2_job",
         py_file='gs://dump-bucket-4/pipeline/p2_test.py',
         py_options=[],
         # pipeline_options={
