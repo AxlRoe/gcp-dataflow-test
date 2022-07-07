@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export PROJECT=data-flow-test-327119
+export PROJECT=scraper-v1-351921
 export REPOSITORY=dataflow-repo
 export IMAGE_NAME=ktbq-python
 

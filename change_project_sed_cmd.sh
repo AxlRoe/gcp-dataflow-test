@@ -1,4 +1,4 @@
 #!/bin/bash
 
-LL=$(grep -r 'gentle-nuance-343015' * | awk -F ':' '{print $1}' | uniq); for f in $LL; do sed -i 's/gentle-nuance-343015/gentle-nuance-343015/g' $f; done
+LL=$(grep -r 'scraper-v1-351921' * | awk -F ':' '{print $1}' | uniq); for f in $LL; do sed -i 's/scraper-v1-351921/scraper-v1-351921/g' $f; done
 

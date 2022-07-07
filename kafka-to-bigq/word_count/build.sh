@@ -6,7 +6,7 @@ TEMPLATE_NAME=Word_Count
 REGION="europe-west6-a"
 export GOOGLE_APPLICATION_CREDENTIAL=$(pwd)/data-flow-sa.json
 BUCKET_NAME=data-flow-bucket_1
-PROJECT=data-flow-test-327119
+PROJECT=scraper-v1-351921
 
 #export TEMPLATE_IMAGE="europe-west6-docker.pkg.dev/${PROJECT}/${REPOSITORY}/${IMAGE_NAME}:latest"
 # Build the image into Container Registry, this is roughly equivalent to:

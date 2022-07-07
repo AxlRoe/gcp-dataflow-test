@@ -1,0 +1,19 @@
+#!/bin/bash
+
+apt update
+apt install aptitude -y
+aptitude install nodejs -y
+aptitude install npm -y
+
+cd root
+mkdir <PROJECT_PLACEHOLDER>
+cd <PROJECT_PLACEHOLDER>
+
+git init
+git remote add origin https://AxlRoe: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@github.com/AxlRoe/<PROJECT_PLACEHOLDER>.git
+git pull origin master
+
+npm install
+#npm start
+
+

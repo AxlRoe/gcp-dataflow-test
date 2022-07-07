@@ -1,6 +1,6 @@
 #!/bin/bash
 
-gcloud config set project data-flow-test-327119
+gcloud config set project scraper-v1-351921
 
 APIS=$(gcloud services list --available | grep -E -i 'dataflow|^stackdriver|^storage\.google|storage-api|^bigquery\.|^pubsub\.|datastore|cloudresource|^compute\.' | awk '{print $1}')
 

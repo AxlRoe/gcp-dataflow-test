@@ -1,0 +1,34 @@
+#!/bin/bash
+
+sudo apt update
+sudo apt install aptitude -y
+sudo aptitude install maven -y
+sudo aptitude install openjdk-11-jre-headless -y
+
+#cd /home/ubuntu
+cd root
+mkdir scraper-logs
+#chown -R ubuntu:ubuntu scraper-logs
+mkdir <PROJECT_PLACEHOLDER>
+cd <PROJECT_PLACEHOLDER>
+git init
+git remote add origin https://AxlRoe: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@github.com/AxlRoe/<PROJECT_PLACEHOLDER>.git
+git pull origin master
+git pull
+#chown -R ubuntu:ubuntu . 
+
+mvn clean install
+cd src/main/compute
+chmod +x start_gcp.sh
+
+cd /root
+
+cat << EOF > kill_java.sh
+#!/bin/bash
+
+PID=\$(ps -ef | grep 'java -jar' | grep -v 'grep' | head -n 1 | awk -F' ' '{print \$2}')
+kill \$PID
+EOF
+
+#./start_gcp.sh
+

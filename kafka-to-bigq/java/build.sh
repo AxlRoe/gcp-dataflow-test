@@ -5,7 +5,7 @@ KAFKA_ADDRESS=$(gcloud compute instances describe kafka-1-kafka-vm-0 --zone=euro
 gcloud auth configure-docker europe-west6-docker.pkg.dev
 export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/data-flow-sa.json
 export BUCKET_NAME=gs://data-flow-bucket_1
-#gsutil mb -p data-flow-test-327119 -c NEARLINE -l europe-west6 -b on gs://data-flow-bucket_1
+#gsutil mb -p scraper-v1-351921 -c NEARLINE -l europe-west6 -b on gs://data-flow-bucket_1
 gsutil cp spec.json $BUCKET_NAME/images/
 gsutil cp my_function.js $BUCKET_NAME/
 
@@ -15,7 +15,7 @@ if [ ! -d ./DataflowTemplates ]; then
 fi
 
 cd ./DataflowTemplates/v2
-export PROJECT=data-flow-test-327119
+export PROJECT=scraper-v1-351921
 export REPOSITORY=dataflow-repo
 export IMAGE_NAME=ktbq-test
 export TARGET_GCR_IMAGE=europe-west6-docker.pkg.dev/${PROJECT}/${REPOSITORY}/${IMAGE_NAME}
