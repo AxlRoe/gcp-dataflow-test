@@ -1,8 +1,8 @@
 #!/bin/bash
 
-gcloud projects get-iam-policy scraper-v1-351921  \
+gcloud projects get-iam-policy scraper-vx  \
 --flatten="bindings[].members" \
 --format='table(bindings.role)' \
---filter="bindings.members:data-flow-sa@scraper-v1-351921.iam.gserviceaccount.com"
+--filter="bindings.members:data-flow-sa@scraper-vx.iam.gserviceaccount.com"
 
 
