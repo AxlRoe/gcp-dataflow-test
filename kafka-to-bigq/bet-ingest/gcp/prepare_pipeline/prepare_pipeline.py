@@ -6,16 +6,15 @@ import argparse
 import json
 import logging
 import math
-from collections import Counter
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 
 import apache_beam as beam
 import jsonpickle
 import numpy as np
 import pandas as pd
+import sqlalchemy
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.io import WriteToText, ReadFromText
-from apache_beam.io.gcp.internal.clients import bigquery
 from apache_beam.options.pipeline_options import PipelineOptions
 
 
@@ -107,7 +106,30 @@ class EnrichWithDrawPercentage (DoFn):
         row_dict['draw_perc'] = score_dict['perc']
         yield row_dict
 
-def run(args=None):
+
+class ReadFromDBFn(beam.DoFn):
+
+    def __init__(self, url, query, query_params={}, *args, **kwargs):
+        super(ReadFromDBFn, self).__init__(*args, **kwargs)
+        self.url = url
+        self.query = query
+        self.query_params = query_params
+
+    def process(self, data, **kwargs):
+        data = dict(data)
+
+        engine = sqlalchemy.create_engine(self.url, pool_timeout=10)
+
+        query_params = self.query_params
+
+        if 'db_query_params' in data:
+            query_params = data['db_query_params']
+
+        for record in engine.execute(sqlalchemy.sql.text(self.query), query_params):
+            yield dict(record)
+
+
+def run(db_url, args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
     pipeline_options = PipelineOptions(
@@ -117,7 +139,7 @@ def run(args=None):
     def aJson(stats, sample):
         return {
             "event_id": sample["eventId"],
-            "minute" : int(sample["minute"]),
+            "minute": int(sample["minute"]),
             "prediction": None,
             "back": round(sample["back"] * 100) / 100,
             "lay": round(sample["lay"] * 100) / 100,
@@ -199,22 +221,6 @@ def run(args=None):
         df = pd.DataFrame(rows[1:], columns=rows[0])
         return df.drop(columns=['event_id'])
 
-    def current_result_is(prediction, hgoal, agoal):
-        if 'HOME' == prediction:
-            if hgoal > agoal:
-                return 'EXPECTED'
-            elif hgoal == agoal:
-                return 'DRAW'
-            else:
-                return 'WRONG'
-        elif 'AWAY' == prediction:
-            if hgoal < agoal:
-                return 'EXPECTED'
-            elif hgoal == agoal:
-                return 'DRAW'
-            else:
-                return 'WRONG'
-
     def drop_rule_out_goals(df):
         df = df.sort_values('minute')
         def assign_real_goal_value(df, goal_col, goal_diff):
@@ -292,14 +298,15 @@ def run(args=None):
     start_of_day = datetime.combine(datetime.utcnow(), time.min)
     start_of_day = '2022-06-27' #start_of_day.strftime("%Y-%m-%d") #'2022-06-27'
     bucket = 'dump-bucket-4'
+    query_match = 'select * from match'
+    query_runner = 'select * from runner'
+
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
-        match_table_spec = bigquery.TableReference(projectId='scraper-vx', datasetId='bet', tableId='match')
-        runner_table_spec = bigquery.TableReference(projectId='scraper-vx', datasetId='bet', tableId='runner')
         match_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | 'Read match bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://' + bucket + '/tmp/', table=match_table_spec)
+                | 'Read match table' >> beam.ParDo(ReadFromDBFn(url=db_url, query=query_match))
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
                 #| "debug match " >> beam.Map(print)
@@ -308,7 +315,7 @@ def run(args=None):
         runner_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | 'Read runner bq table' >> beam.io.ReadFromBigQuery(gcs_location='gs://' + bucket + '/tmp/', table=runner_table_spec)
+                | 'Read match table' >> beam.ParDo(ReadFromDBFn(url=db_url, query=query_runner))
                 | "Parse runner row " >> beam.ParDo(RunnerRow())
                 #| 'debug runner ' >> beam.Map(print)
         )
@@ -415,13 +422,13 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     parser = argparse.ArgumentParser()
 
-    # parser.add_argument(
-    #     '--bucket',
-    #     dest='bucket',
-    #     required=True,
-    #     help='bucket where read/write csv'
-    # )
+    parser.add_argument(
+        '--db_url',
+        dest='db_url',
+        required=True,
+        help='bucket where read/write csv'
+    )
 
     known_args, pipeline_args = parser.parse_known_args()
     #run(known_args.bucket, pipeline_args)
-    run(pipeline_args)
+    run(known_args.db_url, pipeline_args)
