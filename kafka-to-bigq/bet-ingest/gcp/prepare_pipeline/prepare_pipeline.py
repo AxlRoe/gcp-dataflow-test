@@ -306,6 +306,7 @@ def run(db_url, args=None):
         match_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
+                | "Initialize match extraction" >> beam.Create([{}])
                 | 'Read match table' >> beam.ParDo(ReadFromDBFn(url=db_url, query=query_match))
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
@@ -314,6 +315,7 @@ def run(db_url, args=None):
 
         runner_dict = (
                 pipeline
+                | "Initialize runner extraction" >> beam.Create([{}])
                 # Each row is a dictionary where the keys are the BigQuery columns
                 | 'Read runner table' >> beam.ParDo(ReadFromDBFn(url=db_url, query=query_runner))
                 | "Parse runner row " >> beam.ParDo(RunnerRow())
