@@ -108,7 +108,7 @@ class CustomCommands(setuptools.Command):
 # so this dependency will not trigger anything to be installed unless a version
 # restriction is specified.
 REQUIRED_PACKAGES = [
-    'numpy', 'jsonpickle', 'sqlalchemy' #, 'psycopg2-binary'
+    'numpy', 'jsonpickle', 'sqlalchemy', 'cloud-sql-python-connector' #, 'psycopg2-binary'
 ]
 
 setuptools.setup(
