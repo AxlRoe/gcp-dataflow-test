@@ -315,7 +315,7 @@ def run(db_url, args=None):
         runner_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | 'Read match table' >> beam.ParDo(ReadFromDBFn(url=db_url, query=query_runner))
+                | 'Read runner table' >> beam.ParDo(ReadFromDBFn(url=db_url, query=query_runner))
                 | "Parse runner row " >> beam.ParDo(RunnerRow())
                 #| 'debug runner ' >> beam.Map(print)
         )
