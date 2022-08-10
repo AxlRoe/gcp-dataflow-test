@@ -63,8 +63,7 @@ class RunnerRow (DoFn):
         }]
 
 class EnrichWithStartQuotes (DoFn):
-    def process(self, tuple, runners):
-        sample = tuple[1]
+    def process(self, sample, runners):
         runner_dict = {x['id']: x for x in filter(lambda runner: runner['id'] == sample['event_id'], runners)}
 
         if not sample['event_id'] in runner_dict.keys():
@@ -136,7 +135,7 @@ def run(db_url, args=None):
         args, save_main_session=True
     )
 
-    def aJson(stats, sample):
+    def aJson(sample):
         return {
             "event_id": sample["eventId"],
             "minute": int(sample["minute"]),
@@ -146,9 +145,9 @@ def run(db_url, args=None):
             "start_lay": float("NaN"),
             "start_back": float("NaN"),
             "home": sample["home"],
-            "hgoal": stats["home"]["goals"],
+            "hgoal": sample["homeStats"]["goals"],
             "guest": sample["guest"],
-            "agoal": stats["away"]["goals"],
+            "agoal": sample["awayStats"]["goals"],
         }
 
     def calculate_draw_percentage(tuple):
@@ -197,7 +196,7 @@ def run(db_url, args=None):
 
         return str(last_thr)
 
-    def sample_and_goal_jsons(merged_tuple):
+    def sample_and_goal_jsons(sample):
         data = merged_tuple[1]
 
         try:
@@ -212,7 +211,7 @@ def run(db_url, args=None):
                 print("missing values for stats, event: " + sample["eventId"])
                 continue
 
-            output.append(aJson(stats, sample))
+            output.append(aJson(sample))
 
         return output
 
@@ -337,32 +336,17 @@ def run(db_url, args=None):
                 #| 'debug draw match ' >> beam.Map(print)
         )
 
-        samples_tuple = (
+        samples = (
                 pipeline
                 | 'Create sample pcoll' >> ReadFromText('gs://' + bucket + '/' + start_of_day + '/live/*.json')
                 | 'Convert sample file to json' >> ParDo(JsonParser())
                 | 'flatten samples ' >> beam.FlatMap(lambda x: x)
-                | 'Add key to samples ' >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
-        )
-        #TODO add minute in score json
-        stats_tuple = (
-                pipeline
-                | 'Create stats pcoll' >> ReadFromText('gs://' + bucket + '/' + start_of_day + '/stats/*.json')
-                | "Convert stats file to json" >> ParDo(JsonParser())
-                | 'flatten scores ' >> beam.FlatMap(lambda x: x)
-                | "Add key to stats " >> WithKeys(lambda x: x['eventId'] + '#' + x['ts'])
+                | 'Getting back record' >> beam.FlatMap(lambda sample: aJson(sample))
         )
 
-        sample_with_score_tuples = (
-                ({'samples': samples_tuple, 'stats': stats_tuple})
-                | 'Merge back record' >> beam.CoGroupByKey()
-                | 'remove empty stats ' >> beam.Filter(lambda merged_tuple: len(merged_tuple[1]['samples']) > 0 and len(merged_tuple[1]['stats']) > 0)
-                | 'Getting back record' >> beam.FlatMap(lambda x: sample_and_goal_jsons(x))
-                | "add key " >> WithKeys(lambda x: x['event_id'])
-        )
 
         samples_enriched_with_start_quotes = (
-                sample_with_score_tuples
+                samples
                 | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
                 | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
                 | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
