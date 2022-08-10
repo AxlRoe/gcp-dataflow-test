@@ -16,6 +16,8 @@ import sqlalchemy
 from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.io import WriteToText, ReadFromText
 from apache_beam.options.pipeline_options import PipelineOptions
+from google.cloud.sql.connector import Connector, IPTypes
+from sqlalchemy.dialects.postgresql import pg8000
 
 
 class JsonParser(DoFn):
@@ -117,15 +119,30 @@ class ReadFromDBFn(beam.DoFn):
     def process(self, data, **kwargs):
         data = dict(data)
 
-        engine = sqlalchemy.create_engine(self.url, pool_timeout=10)
+        def getconn():
+            with Connector() as connector:
+                conn = connector.connect(
+                    "scraper-vx:europe-west1:scraper-db-3",
+                    "pg8000",
+                    user="postgres",
+                    password="postgres",
+                    db="postgres",
+                    ip_type=IPTypes.PUBLIC,
+                    enable_iam_auth=True
+                )
+            return conn
 
-        query_params = self.query_params
+        pool = sqlalchemy.create_engine('postgresql+pg8000://', creator=getconn)
 
-        if 'db_query_params' in data:
-            query_params = data['db_query_params']
+        with pool.connect() as db_conn:
 
-        for record in engine.execute(sqlalchemy.sql.text(self.query), query_params):
-            yield dict(record)
+            query_params = self.query_params
+
+            if 'db_query_params' in data:
+                query_params = data['db_query_params']
+
+            for record in db_conn.execute(sqlalchemy.sql.text(self.query), query_params):
+                yield dict(record)
 
 
 def run(db_url, args=None):
