@@ -15,7 +15,7 @@ python prepare_main.py \
 --region europe-west1 \
 --setup_file ./setup.py \
 --runner DataflowRunner \
---db_url postgresql://postgres:postgres@$DB_HOST:5432/postgres
+--db_url postgresql://postgres:postgres@$DB_HOST:5432/postgres \
 --staging_location gs://$BUCKET_NAME/staging \
 --temp_location gs://$BUCKET_NAME/tmp/ \
 --experiment use_unsupported_python_version pipeline
