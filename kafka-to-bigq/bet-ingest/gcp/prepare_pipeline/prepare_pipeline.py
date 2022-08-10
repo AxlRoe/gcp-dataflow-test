@@ -17,7 +17,6 @@ from apache_beam import DoFn, ParDo, WithKeys, GroupByKey
 from apache_beam.io import WriteToText, ReadFromText
 from apache_beam.options.pipeline_options import PipelineOptions
 from google.cloud.sql.connector import Connector, IPTypes
-from sqlalchemy.dialects.postgresql import pg8000
 
 
 class JsonParser(DoFn):
