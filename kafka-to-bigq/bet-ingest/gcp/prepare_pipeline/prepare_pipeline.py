@@ -296,7 +296,7 @@ def run(db_url, args=None):
         return pd.concat(dfs).reset_index(drop=True)
 
     start_of_day = datetime.combine(datetime.utcnow(), time.min)
-    start_of_day = '2022-06-27' #start_of_day.strftime("%Y-%m-%d") #'2022-06-27'
+    start_of_day = '2022-08-10' #start_of_day.strftime("%Y-%m-%d") #'2022-06-27'
     bucket = 'dump-bucket-4'
     query_match = 'select * from match'
     query_runner = 'select * from runner'
@@ -306,7 +306,7 @@ def run(db_url, args=None):
         match_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns
-                | "Initialize match extraction" >> beam.Create([{}])
+                | "Initialize match extraction" >> beam.Create([{}]) #needed otherwise get Pbeing windowing error
                 | 'Read match table' >> beam.ParDo(ReadFromDBFn(url=db_url, query=query_match))
                 | "Convert list in row " >> ParDo(MatchRow())
                 | "Filter matches without favourite" >> beam.Filter(lambda row: row['favourite'] is not None)
