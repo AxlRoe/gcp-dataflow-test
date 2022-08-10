@@ -59,4 +59,4 @@ if __name__ == '__main__':
   logging.getLogger().setLevel(logging.INFO)
   #os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'data-flow-sa.json'
   os.environ['GOOGLE_CLOUD_PROJECT'] = 'scraper-vx'
-  prepare_pipeline.run()
+  prepare_pipeline.run('postgresql://postgres:postgres@104.199.35.248:5432/postgres')
