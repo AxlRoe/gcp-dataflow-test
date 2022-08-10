@@ -2,7 +2,7 @@
 
 export GOOGLE_APPLICATION_CREDENTIAL=data-flow-sa.json
 BUCKET_NAME=dump-bucket-4
-PROJECT=scraper-v1-351921
+PROJECT=scraper-vx
 
 virtualenv venv
 source venv/bin/activate

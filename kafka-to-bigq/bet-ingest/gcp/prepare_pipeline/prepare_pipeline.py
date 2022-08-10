@@ -294,8 +294,8 @@ def run(args=None):
     bucket = 'dump-bucket-4'
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
-        match_table_spec = bigquery.TableReference(projectId='scraper-v1-351921', datasetId='bet', tableId='match')
-        runner_table_spec = bigquery.TableReference(projectId='scraper-v1-351921', datasetId='bet', tableId='runner')
+        match_table_spec = bigquery.TableReference(projectId='scraper-vx', datasetId='bet', tableId='match')
+        runner_table_spec = bigquery.TableReference(projectId='scraper-vx', datasetId='bet', tableId='runner')
         match_dict = (
                 pipeline
                 # Each row is a dictionary where the keys are the BigQuery columns

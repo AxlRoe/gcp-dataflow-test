@@ -201,7 +201,7 @@ def run(args=None):
                 sure_bet_perc.append(0)
 
         summary = {
-            'key': json_name,
+            'range': json_name,
             'q_min': q_m,
             'q_max': q_M,
             'break_even_minute': break_even_minute,
@@ -263,7 +263,7 @@ def run(args=None):
                 | 'Calculate risk ' >> beam.Map(lambda df: compute_model(df))
                 | 'write to file ' >> fileio.WriteToFiles(
                                                 path='gs://' + bucket + '/model/',
-                                                destination=lambda model: model['key'],
+                                                destination=lambda model: model['range'],
                                                 sink=lambda dest: JsonSink(),
                                                 max_writers_per_bundle=1,
                                                 shards=1,
