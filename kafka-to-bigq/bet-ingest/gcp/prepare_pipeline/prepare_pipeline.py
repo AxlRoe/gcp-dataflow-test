@@ -65,6 +65,10 @@ class RunnerRow (DoFn):
 
 class EnrichWithStartQuotes (DoFn):
     def process(self, sample, runners):
+
+        logging.info("****** runner" + type(runners))
+        logging.info("****** sample" + type(sample))
+
         runner_dict = {x['id']: x for x in filter(lambda runner: runner['id'] == sample['event_id'], runners)}
 
         if not sample['event_id'] in runner_dict.keys():
