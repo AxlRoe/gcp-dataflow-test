@@ -347,16 +347,16 @@ def run(db_url, args=None):
                 | 'Convert sample file to json' >> ParDo(JsonParser())
                 | 'flatten samples ' >> beam.FlatMap(lambda x: x)
                 | 'Getting back record' >> beam.Map(lambda sample: aJson(sample))
-        )
-
-
-        samples_enriched_with_start_quotes = (
-                samples
-                | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
-                | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
-                | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
                 | 'debug' >> beam.Map(print)
         )
+
+
+        # samples_enriched_with_start_quotes = (
+        #         samples
+        #         | 'Enrich sample with start quotes' >> beam.ParDo(EnrichWithStartQuotes(), beam.pvalue.AsList(runner_dict))
+        #         | 'Remove empty sample for missing runner ' >> beam.Filter(lambda sample: bool(sample))
+        #         | "Add key to join between pre/live/scores " >> WithKeys(lambda merged_json: merged_json['event_id'])
+        # )
 
         # _ = (samples_enriched_with_start_quotes
         #         | 'Enrich sample with home and guest ' >> beam.ParDo(EnrichWithPrediction(), beam.pvalue.AsList(match_dict))
