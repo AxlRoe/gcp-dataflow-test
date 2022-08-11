@@ -156,6 +156,10 @@ def run(db_url, args=None):
     )
 
     def aJson(sample):
+
+        if not sample["homeStats"] or not sample["awayStats"]:
+            return {}
+
         return {
             "event_id": sample["eventId"],
             "minute": int(sample["minute"]),
@@ -215,25 +219,6 @@ def run(db_url, args=None):
             last_thr = thr
 
         return str(last_thr)
-
-    def sample_and_goal_jsons(sample):
-        data = merged_tuple[1]
-
-        try:
-            stats = data["stats"][0]
-        except:
-            print('AAAARHG')
-
-        samples = data["samples"]
-        output = []
-        for sample in samples:
-            if not stats["home"] or not stats["away"]:
-                print("missing values for stats, event: " + sample["eventId"])
-                continue
-
-            output.append(aJson(sample))
-
-        return output
 
     def create_df_by_event(rows):
         rows.insert(0, ['event_id','minute','prediction','back','lay','start_lay','start_back','hgoal','agoal','draw_perc'])
