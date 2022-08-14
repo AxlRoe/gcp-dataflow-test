@@ -272,6 +272,7 @@ def run(db_url, args=None):
         tmp_df['prediction'] = tmp_df['prediction'].pad()
         tmp_df['runner_name'] = tmp_df['runner_name'].pad()
         tmp_df['event_id'] = tmp_df['event_id'].pad()
+        tmp_df['score'] = tmp_df['score'].pad()
 
         return tmp_df
 
