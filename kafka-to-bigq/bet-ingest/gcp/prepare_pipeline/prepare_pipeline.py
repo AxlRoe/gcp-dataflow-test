@@ -378,7 +378,7 @@ def run(db_url, args=None):
                 | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
                 | 'convert df to list of records ' >> beam.FlatMap(lambda df: df.values.tolist())
                 | 'csv format ' >> beam.Map(lambda row: ';'.join([str(column) for column in row]))
-                | 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv', num_shards=0, shard_name_template='', header='minute;prediction;back;lay;start_lay;start_back;draw_perc;goal_diff_by_prediction')
+                | 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv', num_shards=0, shard_name_template='', header='event_id,runner_name;minute;prediction;back;lay;start_lay;start_back;draw_perc;goal_diff_by_prediction;score')
             )
 
 
