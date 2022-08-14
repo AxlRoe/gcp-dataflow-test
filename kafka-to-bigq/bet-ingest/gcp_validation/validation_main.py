@@ -53,10 +53,10 @@ python juliaset_main.py \
 import logging
 import os
 
-from ml_pipeline import ml_pipeline
+from validation_pipeline import validation_pipeline
 
 if __name__ == '__main__':
   logging.getLogger().setLevel(logging.INFO)
   #os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'data-flow-sa.json'
-  os.environ['GOOGLE_CLOUD_PROJECT'] = 'scraper-vx'
-  ml_pipeline.run()
+  #os.environ['GOOGLE_CLOUD_PROJECT'] = 'scraper-vx'
+  validation_pipeline.run()

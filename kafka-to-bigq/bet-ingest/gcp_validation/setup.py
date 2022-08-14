@@ -108,13 +108,13 @@ class CustomCommands(setuptools.Command):
 # so this dependency will not trigger anything to be installed unless a version
 # restriction is specified.
 REQUIRED_PACKAGES = [
-    'numpy', 'scikit-learn', 'scipy', 'pandas', 'math', 'jsonpickle', 'joblib', 'threadpoolctl'
+    'numpy', 'pandas', 'jsonpickle'
 ]
 
 setuptools.setup(
-    name='data-preparation-setup',
+    name='model-validation-setup',
     version='0.0.1',
-    description='Data preparation workflow',
+    description='Model validation workflow',
     install_requires=REQUIRED_PACKAGES,
     packages=setuptools.find_packages(),
     cmdclass={

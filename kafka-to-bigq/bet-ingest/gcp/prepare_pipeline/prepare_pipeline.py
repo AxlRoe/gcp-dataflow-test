@@ -301,7 +301,7 @@ def run(db_url, args=None):
         return pd.concat(dfs).reset_index(drop=True)
 
     start_of_day = datetime.combine(datetime.utcnow(), time.min)
-    start_of_day = '2022-08-11' #start_of_day.strftime("%Y-%m-%d") #'2022-06-27'
+    start_of_day = '2022-08-13' #start_of_day.strftime("%Y-%m-%d") #'2022-06-27'
     bucket = 'dump-bucket-4'
     query_match = 'select * from match'
     query_runner = 'select * from runner'
@@ -379,7 +379,7 @@ def run(db_url, args=None):
                 | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
                 | 'convert df to list of records ' >> beam.FlatMap(lambda df: df.values.tolist())
                 | 'csv format ' >> beam.Map(lambda row: ';'.join([str(column) for column in row]))
-                | 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv', num_shards=0, shard_name_template='', header='event_id,runner_name;minute;prediction;back;lay;start_lay;start_back;draw_perc;goal_diff_by_prediction;score')
+                | 'write to csv ' >> WriteToText('gs://' + bucket + '/stage/data_' + start_of_day + '.csv', num_shards=0, shard_name_template='', header='event_id;runner_name;minute;prediction;back;lay;start_lay;start_back;draw_perc;goal_diff_by_prediction;score')
             )
 
 

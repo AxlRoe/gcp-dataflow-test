@@ -202,8 +202,6 @@ def run(args=None):
 
         summary = {
             'range': json_name,
-            'q_min': q_m,
-            'q_max': q_M,
             'break_even_minute': break_even_minute,
             'break_even_income': round(float(break_even_income) * 100) / 100,
             'draw_perc': draw_perc,
