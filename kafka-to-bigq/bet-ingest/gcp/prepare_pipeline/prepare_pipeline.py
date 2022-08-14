@@ -271,6 +271,8 @@ def run(db_url, args=None):
         tmp_df['start_lay'] = tmp_df['start_lay'].pad()
         tmp_df['draw_perc'] = tmp_df['draw_perc'].pad()
         tmp_df['prediction'] = tmp_df['prediction'].pad()
+        tmp_df['runner_name'] = tmp_df['runner_name'].pad()
+        tmp_df['event_id'] = tmp_df['event_id'].pad()
 
         return tmp_df
 
