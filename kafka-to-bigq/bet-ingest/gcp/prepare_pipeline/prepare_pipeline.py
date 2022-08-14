@@ -221,8 +221,7 @@ def run(db_url, args=None):
 
     def create_df_by_event(rows):
         rows.insert(0, ['event_id','runner_name','minute','prediction','back','lay','start_lay','start_back','hgoal','agoal','draw_perc','score'])
-        df = pd.DataFrame(rows[1:], columns=rows[0])
-        return df.drop(columns=['event_id'])
+        return  pd.DataFrame(rows[1:], columns=rows[0])
 
     def drop_rule_out_goals(df):
         df = df.sort_values('minute')
