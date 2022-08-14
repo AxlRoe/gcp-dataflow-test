@@ -301,7 +301,7 @@ def run(db_url, args=None):
         return pd.concat(dfs).reset_index(drop=True)
 
     start_of_day = datetime.combine(datetime.utcnow(), time.min)
-    start_of_day = '2022-08-13' #start_of_day.strftime("%Y-%m-%d") #'2022-06-27'
+    start_of_day = '2022-08-14' #start_of_day.strftime("%Y-%m-%d") #'2022-06-27'
     bucket = 'dump-bucket-4'
     query_match = 'select * from match'
     query_runner = 'select * from runner'
