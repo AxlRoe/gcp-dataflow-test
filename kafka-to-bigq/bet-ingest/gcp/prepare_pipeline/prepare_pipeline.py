@@ -159,7 +159,7 @@ def run(db_url, args=None):
 
         return {
             "event_id": sample["eventId"],
-            "runner_name": sample["runner_name"],
+            "runner_name": sample["runnerName"],
             "minute": int(sample["minute"]),
             "prediction": None,
             "back": round(sample["back"] * 100) / 100,
