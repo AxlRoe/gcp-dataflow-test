@@ -159,6 +159,7 @@ def run(db_url, args=None):
 
         return {
             "event_id": sample["eventId"],
+            "runner_name": sample["runner_name"],
             "minute": int(sample["minute"]),
             "prediction": None,
             "back": round(sample["back"] * 100) / 100,
@@ -169,6 +170,7 @@ def run(db_url, args=None):
             "hgoal": sample["homeStats"]["goals"],
             "guest": sample["guest"],
             "agoal": sample["awayStats"]["goals"],
+            "score": sample["score"]
         }
 
     def calculate_draw_percentage(tuple):
@@ -218,7 +220,7 @@ def run(db_url, args=None):
         return str(last_thr)
 
     def create_df_by_event(rows):
-        rows.insert(0, ['event_id','minute','prediction','back','lay','start_lay','start_back','hgoal','agoal','draw_perc'])
+        rows.insert(0, ['event_id','runner_name','minute','prediction','back','lay','start_lay','start_back','hgoal','agoal','draw_perc','score'])
         df = pd.DataFrame(rows[1:], columns=rows[0])
         return df.drop(columns=['event_id'])
 
@@ -371,7 +373,7 @@ def run(db_url, args=None):
                 | 'add goal_diff_by_prediction column' >> beam.Map(lambda df: assign_goal_diff_by_prediction(df))
                 | 'drop draw matches ' >> beam.Filter(lambda df: not is_draw_match(df))
                 | 'merge all dataframe ' >> beam.CombineGlobally(lambda dfs: merge_df(dfs))
-                | 'select columns ' >> beam.Map(lambda df: df[['event_id','runner_name','minute','prediction','back','lay','start_lay','start_back','draw_perc','goal_diff_by_prediction']])
+                | 'select columns ' >> beam.Map(lambda df: df[['event_id','runner_name','minute','prediction','back','lay','start_lay','start_back','draw_perc','goal_diff_by_prediction','score']])
                 | 'filter empty dataframe ' >> beam.Filter(lambda df: not df.empty)
                 | 'convert df to list of records ' >> beam.FlatMap(lambda df: df.values.tolist())
                 | 'csv format ' >> beam.Map(lambda row: ';'.join([str(column) for column in row]))
