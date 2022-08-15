@@ -3,9 +3,11 @@
 from __future__ import absolute_import
 
 import argparse
+import itertools
 import json
 import logging
 import math
+from datetime import datetime, time
 
 import apache_beam as beam
 import jsonpickle
@@ -74,6 +76,8 @@ class Record(DoFn):
         }]
 
 
+
+
 def run(args=None):
     """Main entry point; defines and runs the wordcount pipeline."""
     # Set `save_main_session` to True so DoFns can access globally imported modules.
@@ -81,13 +85,57 @@ def run(args=None):
         args, save_main_session=True
     )
 
-    def calculate_stats(df):
-        range = df['range'].iloc[0]
-        stats = {
+    def calculate_error(join_tuple):
+        range = join_tuple[0]
+        model = join_tuple[1]['model']
+        validation = join_tuple[1]['validation']
+
+        if not join_tuple[1]['model'] or not join_tuple[1]['validation']:
+            return {}
+
+        bem_model = model['break_even_minute']['mean']
+
+        bem_mean = validation['break_even_minute']['mean']
+        bem_uncert = validation['break_even_minute']['uncert']
+
+        bem_error = (bem_model - bem_mean) / bem_model if bem_model - bem_mean > 0 else 0
+
+        error = {
             'range': range,
+            'break_even_minute': {
+                'error': bem_error,
+                'uncert': bem_uncert
+            }
         }
 
-        g_df = df[['odd', 'minute']].groupby(['minute'])
+        for minute in range(0,120,2):
+            key = str(minute)
+            pred = model[key]
+            real = validation[key]['mean']
+            err = abs((real - pred) / real)
+            error[key] = {
+                'value': err,
+                'uncert': validation[key]['uncert']
+            }
+
+        return error
+
+
+    def calculate_surebet_stats(df):
+        range = df['range'].iloc[0]
+        break_even_minute_mean = df['break_even_minute'].mean()
+        break_even_minute_std = df['break_even_minute'].std()
+        uncert = round(break_even_minute_std / break_even_minute_mean * 100)
+
+        stats = {
+            'range': range,
+            'break_even_minute': {
+                'mean': break_even_minute_mean,
+                'uncert': uncert
+            }
+        }
+
+        g_df = df[['break_even_minute', 'odd', 'minute']].groupby(['minute'])
         counts = g_df.size().to_frame(name='counts')
         counts_df = (counts
                      .join(g_df.agg({'odd': 'mean'}).rename(columns={'odd': 'odd_mean'}))
@@ -97,9 +145,8 @@ def run(args=None):
 
         for index, row in counts_df.iterrows():
             stats[row.minute] = {}
-            stats[row.minute]['count'] = row.counts
-            stats[row.minute]['odd_mean'] = row.odd_mean
-            stats[row.minute]['odd_var'] = row.odd_var
+            stats[row.minute]['mean'] = row.odd_mean
+            stats[row.minute]['uncert'] = round(row.odd_var / row.odd_mean * 100)
 
         return stats
 
@@ -115,7 +162,10 @@ def run(args=None):
         df['revenue'] = df.apply(lambda row: 2 * row.odd - 1, axis=1)
         df['income'] = df.apply(lambda row: row.revenue - responsibility, axis=1)
         df['is_sure'] = df.apply(lambda row: row.prediction == row.score and row.income >= 1, axis=1)
-        return df[(df['is_sure'] == True)]
+        sb_df = df[(df['is_sure'] == True)]
+        break_even_minute = sb_df['minute'].min()
+        sb_df = sb_df.assign(break_even_minute=lambda row: break_even_minute)
+        return sb_df
 
     def extract_surebet(df):
         tmp_df = df.sort_values(by=['minute'])
@@ -123,42 +173,20 @@ def run(args=None):
         validator_fn = validate_factory(runner_name)
         return validator_fn(tmp_df)
 
-    def aJson(model):
-
-        return {
-            "event_id": model["eventId"],
-            "runner_name": model["runnerName"],
-            "minute": int(model["minute"]),
-            "prediction": None,
-            "back": round(model["back"] * 100) / 100,
-            "lay": round(model["lay"] * 100) / 100,
-            "start_lay": float("NaN"),
-            "start_back": float("NaN"),
-            "home": model["home"],
-            "hgoal": model["homeStats"]["goals"],
-            "guest": model["guest"],
-            "agoal": model["awayStats"]["goals"],
-            "score": model["score"]
-        }
-
     bucket = 'dump-bucket-4'
     with beam.Pipeline(options=pipeline_options) as pipeline:
 
-
         model_tuple = (
                 pipeline
-                | 'Create sample pcoll' >> ReadFromText(file_pattern='C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\gcp_validation\\' + '*.json')
-                | 'Convert sample file to json' >> ParDo(JsonParser())
-                | 'Getting back record' >> beam.Map(lambda sample: aJson(sample))
-                | 'Filter empty sample ' >> beam.Filter(lambda sample: bool(sample))
+                | 'Create model pcoll' >> ReadFromText(file_pattern='C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\gcp_validation\\model\\' + '*.json')
+                | 'Convert model file to json' >> ParDo(JsonParser())
+                | 'Model by range ' >> beam.WithKeys(lambda model: model['range'])
         )
 
-
-
-        validation_stats_tuple = (
+        validation_tuple = (
             pipeline
             #| "Read csvs " >> beam.io.ReadFromText(file_pattern='gs://' + bucket + '/stage/*.csv', skip_header_lines=1)
-            | "Read csvs " >> beam.io.ReadFromText(file_pattern='C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\gcp_validation\\' + '*.csv', skip_header_lines=1)
+            | "Read csvs " >> beam.io.ReadFromText(file_pattern='C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\gcp_validation\\validation\\' + '*.csv', skip_header_lines=1)
             | "Parse record " >> beam.ParDo(Record())
             | "drop rows with nan goal diff " >> beam.Filter(lambda row: not math.isnan(row['start_odd']) and not math.isnan(row['goal_diff_by_prediction']))
             | "Use start_back interval as key " >> WithKeys(lambda row: row['event_id'] + row['runner_name'])
@@ -171,34 +199,23 @@ def run(args=None):
             | "Associate start odd as key according to runner " >> beam.WithKeys(lambda row: row['range'])
             | "Group by start odd" >> beam.GroupByKey()
             | "Convert dicts to df" >> beam.Map(lambda tuple: pd.DataFrame(tuple[1]))
-            | "Calculate validation stats " >> beam.Map(lambda df: calculate_stats(df))
-            | "Associate key " >> beam.WithKeys(lambda stats: stats['range'])
+            | "Calculate validation stats " >> beam.Map(lambda df: calculate_surebet_stats(df))
+            | "Stats by key " >> beam.WithKeys(lambda stats: stats['range'])
+        )
 
-            #TODO read model data and compare validation and model to get validation error
-
-            | 'Store validation stats ' >> fileio.WriteToFiles(
-                                        path='gs://' + bucket + '/model/',
-                                        destination=lambda model: model['range'],
-                                        sink=lambda dest: JsonSink(),
-                                        max_writers_per_bundle=1,
-                                        shards=1,
-                                        file_naming=destination_prefix_naming(suffix='.json'))
-                                    )
-
-        # _ = (
-        #         pipeline
-        #         | "Read csvs " >> beam.io.ReadFromText(file_pattern='gs://' + bucket + '/stage/*.csv',
-        #                                                skip_header_lines=1)
-        #
-        #         | 'write to file ' >> fileio.WriteToFiles(
-        #     path='gs://' + bucket + '/model/',
-        #     destination=lambda model: model['range'],
-        #     sink=lambda dest: JsonSink(),
-        #     max_writers_per_bundle=1,
-        #     shards=1,
-        #     file_naming=destination_prefix_naming(suffix='.json'))
-        # )
-
+        start_of_day = datetime.combine(datetime.utcnow(), time.min)
+        _ = (
+            ({'model': model_tuple, 'validation': validation_tuple})
+            | 'Join model and validation ' >> beam.CoGroupByKey()
+            | 'Calculate error ' >> beam.Map(lambda join_tuple: calculate_error(join_tuple))
+            | 'write to file ' >> fileio.WriteToFiles(
+            path='gs://' + bucket + '/error/',
+            destination=lambda error: error['range'] + '_' + str(start_of_day),
+            sink=lambda dest: JsonSink(),
+            max_writers_per_bundle=1,
+            shards=1,
+            file_naming=destination_prefix_naming(suffix='.json'))
+        )
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)

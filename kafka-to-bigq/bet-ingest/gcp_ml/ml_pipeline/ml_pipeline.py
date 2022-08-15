@@ -38,22 +38,6 @@ def run(args=None):
     def matches_where_favourite_is_winning(df):
         return df[(df['goal_diff_by_prediction'] >= 1)]
 
-    def calculate_sure_bet_perc(df):
-
-        goal_diff_total_df = df[['minute', 'lay']].groupby('minute').count()
-        goal_diff_total_df = goal_diff_total_df.rename(columns={'lay': 'total'})
-
-        goal_diff_for_favourite_df = df[(df['goal_diff_by_prediction']) >= int(1)][['minute', 'lay']].groupby(
-            'minute').count()
-        goal_diff_for_favourite_df = goal_diff_for_favourite_df.rename(columns={'lay': 'count'})
-
-        join_ok = goal_diff_total_df.join(goal_diff_for_favourite_df)
-        join_ok['count'] = join_ok.apply(lambda row: 0 if math.isnan(row['count']) else row['count'], axis=1)
-        join_ok['sure_bet_perc_by_min'] = join_ok.apply(
-            lambda row: round((float(row['count']) / float(row['total'])) * 100) / 100, axis=1)
-        join_ok = join_ok.reset_index()
-
-        return pd.merge(df.reset_index(), join_ok[['minute', 'sure_bet_perc_by_min']], how='inner', on=['minute'])
 
     def remove_outliers(df):
         h_outliers, l_outliers = find_outlier_by_perc(df, 'start_back')
@@ -137,7 +121,7 @@ def run(args=None):
         X = tmp_df[['minute']].values
         y = tmp_df[['lay']].values
 
-        m_x = X.flatten().min()
+        m_x = X.flatten().min() #TODO do not remember why it is not always 0
         M_x = 100
 
         pr = LinearRegression()
@@ -161,12 +145,9 @@ def run(args=None):
         X_fit = X_fit.reshape(1, -1).flatten()
         outlier_selector = np.where(ok, 'b', 'r').reshape(1, -1).flatten()
 
-        sure_bet_perc_df = tmp_df[['minute', 'sure_bet_perc_by_min']].groupby('minute').min()
-        sure_bet_perc_dict = sure_bet_perc_df.to_dict()['sure_bet_perc_by_min']
-
         # create 95% confidence interval for population mean weight
         interval = st.t.interval(alpha=0.95, df=len(tmp_df['start_back']) - 1, loc=np.mean(tmp_df['start_back']), scale=st.sem(tmp_df['start_back']))
-        mean_responsibility = 3 * 0.95 * ((interval[1] + interval[0]) / 2 - 1)
+        responsibility = 3 * 0.95 * ((interval[1] + interval[0]) / 2 - 1)
         revenue = 2 * (10 ** y_quad_fit - 1)
 
         incomes = []
@@ -175,7 +156,7 @@ def run(args=None):
 
         for i in np.arange(0, M_x - m_x + 2, 2):
             idx = int(i / 2)
-            incomes.append(revenue[idx][0] - mean_responsibility)
+            incomes.append(revenue[idx][0] - responsibility)
 
         # plt.plot(np.arange(0,M_x+2,2), incomes)
         # plt.axhline(y=1, color='g', linestyle='-')
@@ -192,21 +173,17 @@ def run(args=None):
                 break
 
         break_even_minute = minute_axis[break_even_index] if break_even_index >= 0 else -1
-        break_even_income = incomes[break_even_index] if break_even_index >= 0 else -1
-        sure_bet_perc = []
-        for minute in range(0, 80, 10):
-            if minute in sure_bet_perc_dict.keys():
-                sure_bet_perc.append(sure_bet_perc_dict[minute])
-            else:
-                sure_bet_perc.append(0)
 
         summary = {
             'range': json_name,
-            'break_even_minute': break_even_minute,
-            'break_even_income': round(float(break_even_income) * 100) / 100,
-            'draw_perc': draw_perc,
-            'sure_bet_perc_by_10min': sure_bet_perc
+            'break_even_minute': break_even_minute
         }
+
+        for minute in minute_axis:
+            uncert = round(sd_p[int(minute / 2)] / incomes[int(minute / 2)] * 100)
+            summary[str(minute)] = {}
+            summary[str(minute)] = {'mean': incomes[int(minute / 2)]}
+            summary[str(minute)] = {'uncert': uncert}
 
         # model = {
         #      'interval': json_name,
@@ -253,7 +230,6 @@ def run(args=None):
                 | 'group rows by quote' >> GroupByKey()
                 | "Get list of records by start_back " >> beam.Map(lambda tuple: tuple[1])
                 | 'Create dataframe by quote ' >> beam.Map(lambda rows: create_df_by_event(rows))
-                | 'Calculate goal diff for favourite by minute ' >> beam.Map(lambda df: calculate_sure_bet_perc(df))
                 | "Filter matches with valid start back quote and "
                   "one goal diff for favourite player " >> beam.Map(lambda df: matches_where_favourite_is_winning(df))
                 | "discard empty dataframe " >> beam.Filter(lambda df: not df.empty)
