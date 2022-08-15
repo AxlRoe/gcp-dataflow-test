@@ -123,10 +123,6 @@ def run(args=None):
         validator_fn = validate_factory(runner_name)
         return validator_fn(tmp_df)
 
-    def log_scale_quote(row):
-        row['odd'] = round(np.log10(row['odd']) * 100) / 100
-        return row
-
     def aJson(model):
 
         return {
@@ -165,7 +161,6 @@ def run(args=None):
             | "Read csvs " >> beam.io.ReadFromText(file_pattern='C:\\Users\\mmarini\\MyGit\\gcp-dataflow-test\\kafka-to-bigq\\bet-ingest\\gcp_validation\\' + '*.csv', skip_header_lines=1)
             | "Parse record " >> beam.ParDo(Record())
             | "drop rows with nan goal diff " >> beam.Filter(lambda row: not math.isnan(row['start_odd']) and not math.isnan(row['goal_diff_by_prediction']))
-            | "Log scale odd quote " >> beam.Map(lambda row: log_scale_quote(row))
             | "Use start_back interval as key " >> WithKeys(lambda row: row['event_id'] + row['runner_name'])
             | "Group sample by event " >> GroupByKey()
             | "Getting back record " >> beam.Map(lambda tuple: pd.DataFrame(tuple[1]))
