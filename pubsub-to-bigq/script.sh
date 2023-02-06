@@ -2,35 +2,18 @@
 
 apt update
 apt install aptitude -y
-aptitude install python3-pip -y
-aptitude install python3-virtualenv -y
-aptitude install build-essential libssl-dev libffi-dev python3-dev -y
-aptitude install libpq-dev -y
+aptitude install nodejs -y
+aptitude install npm -y
 
 cd root
-mkdir bet-odds-monitor
-cd bet-odds-monitor
+mkdir exchange
+cd exchange
 
 git init
-git remote add origin https://AxlRoe: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@github.com/AxlRoe/bet-odds-monitor.git
+git remote add origin https://AxlRoe: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@github.com/AxlRoe/exchange.git
 git pull origin master
-git pull
 
-virtualenv venv
-source venv/bin/./activate
+npm install
+#npm start
 
-pip install -r requirements.txt
-
-chmod +x compute/./start_gcp.sh
-
-cd /root
-
-cat << EOF > kill_python.sh
-#!/bin/bash
-
-PID=\$(ps -ef | grep 'python3 start' | grep -v 'grep' | head -n 1 | awk -F' ' '{print \$2}')
-kill \$PID
-EOF
-
-#compute/./start_gcp.sh
 

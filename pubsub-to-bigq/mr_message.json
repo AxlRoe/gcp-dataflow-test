@@ -1,0 +1,194 @@
+{
+  "events_not_started" : [ {
+    "cutoff_date" : "2023-01-08T13:00:00",
+    "events" : [ {
+      "event_id" : "31950810",
+      "competition_id" : "117",
+      "event_name" : "Almeria - Real Sociedad",
+      "cutoff_date" : "2023-01-08T13:00:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-07T17:00:00",
+    "events" : [ {
+      "event_id" : "31962282",
+      "competition_id" : "81",
+      "event_name" : "Juventus - Udinese",
+      "cutoff_date" : "2023-01-07T17:00:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T11:30:00",
+    "events" : [ {
+      "event_id" : "31958795",
+      "competition_id" : "81",
+      "event_name" : "Salernitana - Torino",
+      "cutoff_date" : "2023-01-08T11:30:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T17:00:00",
+    "events" : [ {
+      "event_id" : "31962327",
+      "competition_id" : "81",
+      "event_name" : "Sampdoria - Napoli",
+      "cutoff_date" : "2023-01-08T17:00:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T20:00:00",
+    "events" : [ {
+      "event_id" : "31957929",
+      "competition_id" : "117",
+      "event_name" : "Atletico Madrid - Barcellona",
+      "cutoff_date" : "2023-01-08T20:00:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T20:30:00",
+    "events" : [ {
+      "event_id" : "31996241",
+      "competition_id" : "99",
+      "event_name" : "Boavista - Gil Vicente",
+      "cutoff_date" : "2023-01-08T20:30:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T18:00:00",
+    "events" : [ {
+      "event_id" : "31996242",
+      "competition_id" : "99",
+      "event_name" : "Maritimo - Sporting",
+      "cutoff_date" : "2023-01-08T18:00:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T19:45:00",
+    "events" : [ {
+      "event_id" : "31955580",
+      "competition_id" : "81",
+      "event_name" : "Milan - Roma",
+      "cutoff_date" : "2023-01-08T19:45:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T15:30:00",
+    "events" : [ {
+      "event_id" : "31996240",
+      "competition_id" : "99",
+      "event_name" : "Ferreira - Chaves",
+      "cutoff_date" : "2023-01-08T15:30:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T17:30:00",
+    "events" : [ {
+      "event_id" : "31957888",
+      "competition_id" : "117",
+      "event_name" : "Siviglia - Getafe",
+      "cutoff_date" : "2023-01-08T17:30:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T15:15:00",
+    "events" : [ {
+      "event_id" : "31957889",
+      "competition_id" : "117",
+      "event_name" : "Rayo Vallecano - Real Betis",
+      "cutoff_date" : "2023-01-08T15:15:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-07T17:45:00",
+    "events" : [ {
+      "event_id" : "31996291",
+      "competition_id" : "9404054",
+      "event_name" : "AZ Alkmaar - Vitesse Arnhem",
+      "cutoff_date" : "2023-01-07T17:45:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-07T17:30:00",
+    "events" : [ {
+      "event_id" : "31950812",
+      "competition_id" : "117",
+      "event_name" : "Maiorca - Valladolid",
+      "cutoff_date" : "2023-01-07T17:30:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-07T18:00:00",
+    "events" : [ {
+      "event_id" : "31994197",
+      "competition_id" : "99",
+      "event_name" : "Guimaraes - Rio Ave",
+      "cutoff_date" : "2023-01-07T18:00:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-07T19:45:00",
+    "events" : [ {
+      "event_id" : "31955583",
+      "competition_id" : "81",
+      "event_name" : "Monza - Inter",
+      "cutoff_date" : "2023-01-07T19:45:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-07T20:30:00",
+    "events" : [ {
+      "event_id" : "31994196",
+      "competition_id" : "99",
+      "event_name" : "Casa Pia - Porto",
+      "cutoff_date" : "2023-01-07T20:30:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-07T20:00:00",
+    "events" : [ {
+      "event_id" : "31950811",
+      "competition_id" : "117",
+      "event_name" : "Espanyol - Girona",
+      "cutoff_date" : "2023-01-07T20:00:00"
+    }, {
+      "event_id" : "31996293",
+      "competition_id" : "9404054",
+      "event_name" : "PSV - Sparta Rotterdam",
+      "cutoff_date" : "2023-01-07T20:00:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T13:30:00",
+    "events" : [ {
+      "event_id" : "31997902",
+      "competition_id" : "9404054",
+      "event_name" : "Cambuur Leeuwarden - FC Volendam",
+      "cutoff_date" : "2023-01-08T13:30:00"
+    }, {
+      "event_id" : "31997906",
+      "competition_id" : "9404054",
+      "event_name" : "NEC Nijmegen - Ajax",
+      "cutoff_date" : "2023-01-08T13:30:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T14:00:00",
+    "events" : [ {
+      "event_id" : "31955581",
+      "competition_id" : "81",
+      "event_name" : "Lazio - Empoli",
+      "cutoff_date" : "2023-01-08T14:00:00"
+    }, {
+      "event_id" : "31958815",
+      "competition_id" : "81",
+      "event_name" : "Spezia - Lecce",
+      "cutoff_date" : "2023-01-08T14:00:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T15:45:00",
+    "events" : [ {
+      "event_id" : "31997903",
+      "competition_id" : "9404054",
+      "event_name" : "Excelsior - FC Groningen",
+      "cutoff_date" : "2023-01-08T15:45:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-07T19:00:00",
+    "events" : [ {
+      "event_id" : "31996292",
+      "competition_id" : "9404054",
+      "event_name" : "Fortuna Sittard - Go Ahead Eagles",
+      "cutoff_date" : "2023-01-07T19:00:00"
+    } ]
+  }, {
+    "cutoff_date" : "2023-01-08T11:15:00",
+    "events" : [ {
+      "event_id" : "31997901",
+      "competition_id" : "9404054",
+      "event_name" : "Utrecht - Feyenoord",
+      "cutoff_date" : "2023-01-08T11:15:00"
+    } ]
+  } ]
+}

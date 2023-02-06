@@ -1,5 +1,5 @@
 #!/bin/bash
 
-gsutil mb -p scraper-v1 -c NEARLINE -l europe-west1 -b on gs://dump-bucket-1
+gsutil mb -p scraper-vx3 -c NEARLINE -l europe-west8 -b on gs://dump-bucket-2
 
 

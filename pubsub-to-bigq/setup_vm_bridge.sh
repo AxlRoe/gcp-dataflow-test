@@ -14,9 +14,9 @@ gcloud compute instances create $1 \
 	--image-project=ubuntu-os-cloud \
 	--scopes userinfo-email,cloud-platform \
 	--machine-type=e2-small \
-	--zone=europe-west1-b \
+	--zone=europe-west8-b \
 	--metadata-from-file=startup-script=script.sh \
-	--tags http-server,https-server 
+	--tags http-server,https-server,etl 
 	
 #--address=$ADDR \
 

@@ -1,5 +1,5 @@
 #!/bin/bash
 
-PAYLOAD=$(jq -c . msg.json)
-gcloud beta pubsub topics publish test --message "$PAYLOAD"
+PAYLOAD=$(jq -c . message.json)
+gcloud beta pubsub topics publish discover.mr --message "$PAYLOAD"
 
