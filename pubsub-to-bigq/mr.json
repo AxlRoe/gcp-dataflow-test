@@ -1,0 +1,23 @@
+{
+  "match" : {
+    "event_id" : "31644551",
+    "competition_id" : "1",
+    "event_name" : "Go Ahead Eagles - PSV",
+    "home" : "GO AHEAD EAGLES",
+    "guest" : "PSV",
+    "favourite" : "MILAN",
+    "delta" : 1.0,
+    "cutoff_date" : "2023-01-23T16:16:54.0879676",
+    "outcome" : "HOME"
+  },
+  "runners" : [ {
+    "lay" : 0.0,
+    "back" : 0.0,
+    "matched" : 0.0,
+    "available" : 0.0,
+    "runner_id" : "31644551",
+    "market_id" : "31644551",
+    "total_available" : 0.0,
+    "total_matched" : 0.0
+  } ]
+}
