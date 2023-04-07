@@ -4,6 +4,7 @@ gcloud iam service-accounts delete data-flow-sa@scraper-vx3.iam.gserviceaccount.
 gcloud iam service-accounts create data-flow-sa
 gcloud projects add-iam-policy-binding scraper-vx3 --member="serviceAccount:data-flow-sa@scraper-vx3.iam.gserviceaccount.com" --role="roles/owner"
 gcloud projects add-iam-policy-binding scraper-vx3 --member="serviceAccount:data-flow-sa@scraper-vx3.iam.gserviceaccount.com" --role roles/storage.admin 
+gcloud projects add-iam-policy-binding scraper-vx3 --member="serviceAccount:data-flow-sa@scraper-vx3.iam.gserviceaccount.com" --role roles/cloudbuild.builds.editor
 gcloud projects add-iam-policy-binding scraper-vx3 --member="serviceAccount:data-flow-sa@scraper-vx3.iam.gserviceaccount.com" --role roles/artifactregistry.repoAdmin
 gcloud projects add-iam-policy-binding scraper-vx3 --member="serviceAccount:data-flow-sa@scraper-vx3.iam.gserviceaccount.com" --role roles/artifactregistry.reader
 
