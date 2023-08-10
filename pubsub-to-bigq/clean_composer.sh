@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BUCKET=$(gcloud alpha storage ls --project=scraper-vx3 | grep scraper)
+BUCKET=$(gcloud alpha storage ls --project=scraper-vx4 | grep scraper)
 gcloud composer environments delete scraper-v1-cc-env --location europe-west1
 
 gsutil rm -r $BUCKET
